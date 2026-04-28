@@ -2446,22 +2446,16 @@ async function loadWaLinkInfo() {
     return;
   }
   document.getElementById('wa-link-section').style.display = 'block';
-  // Don't override the pair-phone input view — it's user-initiated.
-  // But pair-code must still check if WA became ready (linking succeeded).
-  if (waLinkView === 'pair-phone') return;
   try {
     const r = await api('/api/wa-admin/info');
     if (!r.ok) return;
     const d = await r.json();
     const el = document.getElementById('wa-link-info');
 
-    // If still on pair-code and WA isn't ready yet, don't touch the UI
-    if (waLinkView === 'pair-code' && !d.ready) return;
-
     if (d.ready) {
-      // Compte lié → arrêter le polling, afficher les infos du compte
+      // Compte lié → stop polling, afficher les infos du compte
       stopWaLinkPoll();
-      if (waLinkView === 'pair-code' || waLinkView === 'qr') toast('WhatsApp connecte !');
+      if (waLinkView === 'qr') toast('WhatsApp connecte !');
       waLinkView = 'info';
       el.innerHTML = `
         <div style="display:flex;align-items:center;gap:10px">
@@ -2474,10 +2468,10 @@ async function loadWaLinkInfo() {
       `;
       setWaUnlinkVisible(true);
     } else if (d.has_qr) {
-      // Not linked, QR available — show method picker or current view
+      // Pas lié + QR dispo : QR-only (pas de picker — pairing-code retiré)
       setWaUnlinkVisible(false);
       if (waLinkView === 'qr') {
-        // Already on QR view: refresh QR image in case it rotated
+        // Déjà sur la vue QR : juste rafraîchir l'image (le QR rotate)
         try {
           const qrR = await api('/api/wa-admin/qr');
           const qrD = await qrR.json();
@@ -2486,12 +2480,12 @@ async function loadWaLinkInfo() {
             if (img) img.src = qrD.qr_data_url;
           }
         } catch {}
-      } else if (waLinkView === 'info' || waLinkView === 'method') {
-        renderWaLinkMethodPicker();
+      } else {
+        await waLinkRenderQr();
       }
       startWaLinkPoll();
     } else {
-      // Loading (neither ready nor QR yet)
+      // Loading (ni ready ni QR)
       setWaUnlinkVisible(false);
       waLinkView = 'info';
       el.innerHTML = '<div class="loader-box" style="padding:24px 10px"><div class="spinner spinner-lg"></div><p style="margin:0">Connexion WhatsApp en cours...</p><p style="margin:0;font-size:11px;opacity:0.7">Cela peut prendre jusqu\'a 1 minute.</p></div>';
@@ -2500,17 +2494,7 @@ async function loadWaLinkInfo() {
   } catch {}
 }
 
-function renderWaLinkMethodPicker() {
-  waLinkView = 'method';
-  const el = document.getElementById('wa-link-info');
-  el.innerHTML = `
-    <p style="color:var(--orange);font-size:13px;margin-bottom:12px">⚠ Aucun compte lie. Choisissez la methode de jumelage.</p>
-    <button class="btn btn-primary" style="margin-bottom:8px" onclick="waLinkPickQr()">QR code</button>
-    <button class="btn btn-secondary" onclick="waLinkPickPhone()">Numero de telephone</button>
-  `;
-}
-
-async function waLinkPickQr() {
+async function waLinkRenderQr() {
   waLinkView = 'qr';
   const el = document.getElementById('wa-link-info');
   el.innerHTML = '<div class="loader-box" style="padding:20px 10px"><div class="spinner spinner-lg"></div><p style="margin:0">Chargement du QR...</p></div>';
@@ -2522,73 +2506,13 @@ async function waLinkPickQr() {
       return;
     }
     el.innerHTML = `
+      <p style="color:var(--orange);font-size:13px;margin-bottom:10px">⚠ Aucun compte lie. Scannez le QR ci-dessous.</p>
       <img id="wa-link-qr-img" src="${d.qr_data_url}" style="border-radius:8px;max-width:240px;width:100%;display:block;margin:0 auto 10px">
-      <p style="color:var(--muted);font-size:11px;text-align:center;margin-bottom:10px">WhatsApp > Appareils lies > Lier un appareil</p>
-      <button class="btn btn-sm btn-secondary" style="width:100%" onclick="renderWaLinkMethodPicker()">← Autre methode</button>
+      <p style="color:var(--muted);font-size:11px;text-align:center;margin:0">WhatsApp &gt; Appareils lies &gt; Lier un appareil</p>
     `;
   } catch {
     el.innerHTML = '<p style="color:var(--red);font-size:13px">Erreur reseau</p>';
   }
-}
-
-function waLinkPickPhone() {
-  waLinkView = 'pair-phone';
-  const el = document.getElementById('wa-link-info');
-  el.innerHTML = `
-    <p style="color:var(--muted);font-size:13px;margin-bottom:10px">Entrez le numero du compte WhatsApp a lier</p>
-    <input type="tel" id="wa-link-phone-input" placeholder="33612345678" inputmode="numeric" style="width:100%;margin-bottom:6px">
-    <p style="color:var(--muted);font-size:11px;margin-bottom:10px;line-height:1.5">
-      ⚠️ Format <strong>international</strong> (indicatif pays, sans le 0)<br>
-      ✅ <strong style="color:var(--g)">33612345678</strong> · ❌ <span style="color:var(--red)">0767545053</span>
-    </p>
-    <button class="btn btn-primary" onclick="waLinkAskPairingCode()">Generer le code</button>
-    <button class="btn btn-sm btn-secondary" style="width:100%;margin-top:8px" onclick="renderWaLinkMethodPicker()">← Autre methode</button>
-  `;
-  setTimeout(() => document.getElementById('wa-link-phone-input')?.focus(), 50);
-}
-
-async function waLinkAskPairingCode() {
-  const input = document.getElementById('wa-link-phone-input');
-  const phone = (input?.value || '').trim().replace(/[^0-9]/g, '');
-  if (!phone || phone.length < 10) return toast('Numero trop court (10-15 chiffres avec indicatif pays)', false);
-  if (phone.length > 15) return toast('Numero trop long (15 chiffres max)', false);
-  if (phone.startsWith('0')) return toast('Ne commencez pas par 0. Ex: 33612345678', false);
-  const btn = event && event.currentTarget;
-  setBtnLoading(btn, true, 'Generation...');
-  try {
-    const r = await api('/api/wa-admin/pairing-code', { method: 'POST', body: JSON.stringify({ phone }) });
-    const d = await r.json();
-    if (!r.ok) {
-      if (d.code === 'WA_RATE_LIMIT') {
-        alert('⚠️ ' + (d.error || 'WhatsApp a temporairement bloque les codes de pairage. Utilisez le QR a la place.'));
-        renderWaLinkMethodPicker();
-        return;
-      }
-      return toast(d.error || 'Erreur', false);
-    }
-    waLinkView = 'pair-code';
-    const el = document.getElementById('wa-link-info');
-    const codeJs = JSON.stringify(d.code);
-    el.innerHTML = `
-      <p style="color:var(--muted);font-size:13px;margin-bottom:10px">Entrez ce code dans WhatsApp sur le telephone du bot</p>
-      <div style="font-family:'SF Mono',Monaco,monospace;font-size:30px;font-weight:700;letter-spacing:6px;text-align:center;padding:16px;background:var(--bg);border-radius:10px;margin-bottom:8px;color:var(--g)">${h(d.code)}</div>
-      <button class="btn btn-primary" style="width:100%;margin-bottom:10px" onclick='copyToClipboard(${codeJs})'>
-        <span style="display:inline-flex;align-items:center;gap:8px;justify-content:center">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          Copier le code
-        </span>
-      </button>
-      <p style="color:var(--muted);font-size:11px;text-align:left;margin-bottom:10px;line-height:1.5">
-        1. WhatsApp &gt; Appareils lies &gt; Lier un appareil<br>
-        2. Tapez "Lier avec un numero de telephone"<br>
-        3. Entrez le code ci-dessus
-      </p>
-      <button class="btn btn-sm btn-secondary" style="width:100%;margin-bottom:6px" onclick="waLinkPickPhone()">Nouveau code</button>
-      <button class="btn btn-sm btn-secondary" style="width:100%" onclick="renderWaLinkMethodPicker()">← Autre methode</button>
-    `;
-    startWaLinkPoll();
-  } catch { toast('Erreur reseau', false); }
-  finally { setBtnLoading(btn, false); }
 }
 
 function startWaLinkPoll() {
