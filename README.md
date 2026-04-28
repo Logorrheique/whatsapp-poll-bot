@@ -6,7 +6,7 @@
 [![Node](https://img.shields.io/badge/node-22%2B-brightgreen)](package.json)
 [![TypeScript](https://img.shields.io/badge/typescript-5.7-blue)](tsconfig.json)
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/ldP4T3?referralCode=QI6QcY&utm_medium=integration&utm_source=template&utm_campaign=generic)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/whatsapp-poll-bot?referralCode=QI6QcY&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
 ## Features
 
@@ -83,7 +83,7 @@ You can now create your first poll.
 
 ### Railway (recommended — 1-click deploy)
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/ldP4T3?referralCode=QI6QcY&utm_medium=integration&utm_source=template&utm_campaign=generic)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/whatsapp-poll-bot?referralCode=QI6QcY&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
 The template provisions the Node service, the Postgres backup DB, and the persistent volume. You just need to fill in the env variables (`ADMIN_PHONES`, `PAIR_SECRET`).
 
