@@ -6,6 +6,8 @@
 [![Node](https://img.shields.io/badge/node-22%2B-brightgreen)](package.json)
 [![TypeScript](https://img.shields.io/badge/typescript-5.7-blue)](tsconfig.json)
 
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/ldP4T3?referralCode=QI6QcY&utm_medium=integration&utm_source=template&utm_campaign=generic)
+
 ## Features
 
 - **Recurring polls** scheduled via cron (daily, weekdays, weekly, monthly, custom)
@@ -79,7 +81,13 @@ You can now create your first poll.
 
 ## Production deployment
 
-### Railway (recommended — magic Docker auto-deploy)
+### Railway (recommended — 1-click deploy)
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/ldP4T3?referralCode=QI6QcY&utm_medium=integration&utm_source=template&utm_campaign=generic)
+
+The template provisions the Node service, the Postgres backup DB, and the persistent volume. You just need to fill in the env variables (`ADMIN_PHONES`, `PAIR_SECRET`).
+
+Manual setup (if you'd rather not use the template):
 
 1. **Fork this repo** on GitHub
 2. On [Railway](https://railway.app/): *New Project* → *Deploy from GitHub*, pick your fork
