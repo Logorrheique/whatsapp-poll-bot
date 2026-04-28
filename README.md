@@ -5,6 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-22%2B-brightgreen)](package.json)
 [![TypeScript](https://img.shields.io/badge/typescript-5.7-blue)](tsconfig.json)
+[![Docker](https://img.shields.io/badge/ghcr.io-whatsapp--poll--bot-blue?logo=docker)](https://github.com/Logorrheique/whatsapp-poll-bot/pkgs/container/whatsapp-poll-bot)
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/whatsapp-poll-bot?referralCode=QI6QcY&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
@@ -99,18 +100,31 @@ Manual setup (if you'd rather not use the template):
 
 ### Docker (anywhere)
 
+A pre-built multi-arch image (linux/amd64 + linux/arm64) is published to **GitHub Container Registry** on every release:
+
 ```bash
-docker build -t poll-bot .
 docker run -d \
+  --name poll-bot \
   -p 3000:3000 \
-  -v /path/to/persistent/data:/app/data \
+  -v poll-bot-data:/app/data \
   -e ADMIN_PHONES=33612345678 \
   -e PAIR_SECRET=$(openssl rand -hex 24) \
   -e NODE_ENV=production \
+  ghcr.io/logorrheique/whatsapp-poll-bot:latest
+```
+
+Available tags: `latest`, `v2.0.0`, `2.0`, `2`, plus `master` for the bleeding-edge build.
+
+Or build from source:
+
+```bash
+docker build -t poll-bot .
+docker run -d -p 3000:3000 -v poll-bot-data:/app/data \
+  -e ADMIN_PHONES=33612345678 -e PAIR_SECRET=$(openssl rand -hex 24) \
   poll-bot
 ```
 
-The `Dockerfile` (Node 22 slim) builds, then runs `node dist/index.js` with `--max-old-space-size=256` (matches Railway's RAM budget).
+The image is multi-stage (Node 22 slim base, ~80 MB), runs as a non-root `node` user, and ships an OCI HEALTHCHECK that hits `/health`.
 
 ### Plain self-hosting
 

@@ -1,37 +1,56 @@
-FROM node:22-slim
+# syntax=docker/dockerfile:1.7
 
-# Plus de Chromium ni de deps Puppeteer : passe Baileys (port whatsapp-web.js
-# vers @whiskeysockets/baileys, pure WebSocket Node.js). Image divisée par
-# ~5 et RAM runtime par ~6.
-
+# ---------- Stage 1 : build ----------
+FROM node:22-slim AS builder
 WORKDIR /app
 
 # Install all dependencies (including dev for tsc)
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --no-audit --no-fund
 
 # Copy source and build
 COPY tsconfig.json ./
 COPY src/ ./src/
-COPY public/ ./public/
 RUN npx tsc
 
-# Remove dev dependencies after build
+# Drop dev dependencies — only production deps stay in node_modules
 RUN npm prune --omit=dev
 
-# Create data directory (Railway volume mount point) — y vivent désormais
-# data/baileys_auth/ (creds Baileys multi-fichiers) + polls.db.
+# ---------- Stage 2 : runtime ----------
+FROM node:22-slim AS runtime
+WORKDIR /app
+
+# OCI labels — picked up by GitHub Container Registry to link the image
+# to the source repo and license, and shown on the package page.
+LABEL org.opencontainers.image.title="WhatsApp Poll Bot" \
+      org.opencontainers.image.description="Self-hosted WhatsApp bot to schedule recurring polls across multiple groups." \
+      org.opencontainers.image.source="https://github.com/Logorrheique/whatsapp-poll-bot" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.documentation="https://github.com/Logorrheique/whatsapp-poll-bot#readme"
+
+# Copy built artifacts and pruned node_modules from the builder stage
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY package.json ./
+COPY public/ ./public/
+
+# Persistent data lives here (mount a volume on /app/data in production):
+#   - data/baileys_auth/   Baileys multi-file creds + Signal keys
+#   - data/polls.db        SQLite primary DB (WAL mode)
 RUN mkdir -p data
 
-# Runtime env : NODE_ENV=production active CORS strict + HTTPS redirect
-# dans src/index.ts. Doit être défini APRÈS `npm ci` et `npm prune` pour
-# ne pas interférer avec l'install (npm lit aussi NODE_ENV).
+# Runtime env: NODE_ENV=production enables strict CORS + HTTPS redirect
+# in src/index.ts. Set AFTER the build stage to avoid affecting npm install.
 ENV NODE_ENV=production
 
-# Docker HEALTHCHECK — Railway utilise son propre healthcheckPath déclaré
-# dans railway.json, mais ce check interne permet à docker ps / docker run
-# de refléter l'état du service. Shell form pour que ${PORT:-3000} soit
-# expansé (Railway assigne son propre port via PORT env var).
+# Drop root for runtime — the upstream node:22-slim image ships a
+# non-privileged "node" user we can re-use.
+RUN chown -R node:node /app
+USER node
+
+# Container HEALTHCHECK — orchestrators (docker, podman, k8s probes) read
+# this. Railway uses its own healthcheckPath in railway.json, this one is
+# for any other deployment target.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||3000)+'/health', r => process.exit(r.statusCode===200?0:1)).on('error', () => process.exit(1))"
 
