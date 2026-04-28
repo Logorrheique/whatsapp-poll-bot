@@ -1,78 +1,78 @@
-# Contribuer à Poll Bot
+# Contributing to Poll Bot
 
-Merci de l'intérêt ! Ce guide couvre tout ce qu'il faut savoir pour contribuer.
+Thanks for your interest! This guide covers everything you need to know to contribute.
 
-## Avant de commencer
+## Before you start
 
-- **Bugs** : ouvre une issue avec un repro minimal (étapes, comportement attendu, comportement observé, version Node, OS).
-- **Features** : ouvre d'abord une issue pour discuter du besoin avant d'écrire du code — ça évite les PR qui ne sont pas dans la direction du projet.
-- **Vulnérabilités** : **n'ouvre pas d'issue publique**. Suis [`SECURITY.md`](SECURITY.md).
+- **Bugs**: open an issue with a minimal repro (steps, expected behavior, actual behavior, Node version, OS).
+- **Features**: open an issue first to discuss the need before writing code — avoids PRs that don't fit the project's direction.
+- **Vulnerabilities**: **do not open a public issue**. Follow [`SECURITY.md`](SECURITY.md).
 
-## Setup local
+## Local setup
 
 ```bash
-git clone https://github.com/<your-fork>/poll-bot.git
-cd poll-bot
+git clone https://github.com/<your-fork>/whatsapp-poll-bot.git
+cd whatsapp-poll-bot
 npm install
 cp .env.example .env
-# édite .env (ADMIN_PHONES + PAIR_SECRET suffisent)
+# edit .env (ADMIN_PHONES + PAIR_SECRET are enough)
 npm run dev
 ```
 
-## Workflow git
+## Git workflow
 
-- Branche par défaut : `master` (= production)
-- Branche d'intégration : `preproduction`
-- **Ouvre les PR contre `preproduction`**, pas `master`.
-- Branches de feature : `feat/<short-name>`, fixes : `fix/<short-name>`.
+- Default branch: `master` (= production)
+- Integration branch: `preproduction`
+- **Open PRs against `preproduction`**, not `master`.
+- Feature branches: `feat/<short-name>`; fixes: `fix/<short-name>`.
 
-## Avant de soumettre une PR
+## Before submitting a PR
 
 ```bash
-npx tsc --noEmit       # type check strict — DOIT passer
-npm test               # suite Vitest — DOIT passer (~290 tests)
-npm run test:coverage  # optionnel, pour vérifier qu'on ne régresse pas
+npx tsc --noEmit       # strict type check — MUST pass
+npm test               # Vitest suite — MUST pass (~290 tests)
+npm run test:coverage  # optional, to check for regressions
 ```
 
-La CI (`.github/workflows/test.yml`) refait ces vérifications + build TypeScript. Une PR avec CI rouge ne sera pas mergée.
+CI (`.github/workflows/test.yml`) re-runs these checks + the TypeScript build. A PR with red CI won't be merged.
 
 ## Conventions
 
-### Code TypeScript
-- `tsconfig.json` est en mode `strict` — pas de `any` sauf cas justifié (parseurs SQL essentiellement).
-- Types explicites sur les fonctions exportées.
-- Prefer `import type { … }` pour les imports type-only.
+### TypeScript code
+- `tsconfig.json` is in `strict` mode — no `any` except when justified (mostly SQL parsers).
+- Explicit types on exported functions.
+- Prefer `import type { … }` for type-only imports.
 
 ### SQL
-- **Toujours** des prepared statements (`db.prepare(…).run/get/all`).
-- Jamais de concat avec input utilisateur.
-- Migrations idempotentes dans `migrate()` (`hasCol()` guard).
+- **Always** use prepared statements (`db.prepare(…).run/get/all`).
+- Never concatenate user input.
+- Idempotent migrations in `migrate()` (`hasCol()` guard).
 
 ### Frontend (`public/index.html`)
-- Vanilla JS, pas de framework, pas de build step.
-- Toute insertion DOM passe par `h()` (HTML escape).
-- `api()` wrapper au lieu de `fetch` direct (gère token + 401).
-- `setBtnLoading(btn, true, "...")` sur les actions longues.
+- Vanilla JS, no framework, no build step.
+- All DOM insertions go through `h()` (HTML escape).
+- Use the `api()` wrapper instead of `fetch` directly (handles token + 401).
+- `setBtnLoading(btn, true, "...")` for long-running actions.
 
 ### Commits
-- Messages en français ou anglais, peu importe — lisibles, atomiques.
-- Format : sujet court (≤ 72 chars), corps détaillé si nécessaire.
-- Pas de squash imposé, mais évite les commits "wip" ou "fix typo" — rebase avant la PR.
+- Messages in English (preferred) or French — atomic and readable.
+- Format: short subject (≤ 72 chars), detailed body if needed.
+- No mandatory squash, but avoid "wip" or "fix typo" commits — rebase before the PR.
 
 ### Tests
-- Tout fix de bug doit être accompagné d'un test qui aurait attrapé le bug.
-- Tout nouveau code dans `src/` doit être couvert par au moins un test.
-- Tests dans `tests/{unit,db,routes,scheduler,e2e,perf}/<module>.test.ts`.
+- Every bug fix must come with a test that would have caught the bug.
+- Any new code in `src/` must be covered by at least one test.
+- Tests live in `tests/{unit,db,routes,scheduler,e2e,perf}/<module>.test.ts`.
 
 ## Architecture
 
-Vue d'ensemble dans le README. Pour le détail :
+High-level view in the README. For details:
 - `src/index.ts` — bootstrap Express + WhatsApp + scheduler
-- `src/whatsapp.ts` — moteur Baileys (init, send, receive votes, lifecycle)
-- `src/db.ts` — toutes les requêtes SQLite (prepared)
-- `src/routes/` — un fichier par domaine fonctionnel
+- `src/whatsapp.ts` — Baileys engine (init, send, receive votes, lifecycle)
+- `src/db.ts` — all SQLite queries (prepared)
+- `src/routes/` — one file per functional domain
 - `src/middleware/` — auth/admin/writer guards
 
-## Questions ?
+## Questions?
 
-Ouvre une [Discussion GitHub](../../discussions) ou pingue sur l'issue concernée. Pas de canal Discord/Slack pour rester ouvert et asynchrone.
+Open a [GitHub Discussion](../../discussions) or comment on the relevant issue. No Discord/Slack channel — keeps things open and asynchronous.

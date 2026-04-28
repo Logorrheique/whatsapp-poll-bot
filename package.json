@@ -1,7 +1,7 @@
 {
   "name": "whatsapp-poll-bot",
   "version": "2.0.0",
-  "description": "Bot WhatsApp pour programmer des sondages récurrents dans plusieurs groupes",
+  "description": "Self-hosted WhatsApp bot to schedule recurring polls across multiple groups",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
