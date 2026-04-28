@@ -1,0 +1,51 @@
+{
+  "name": "whatsapp-poll-bot",
+  "version": "2.0.0",
+  "description": "Bot WhatsApp pour programmer des sondages récurrents dans plusieurs groupes",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node --max-old-space-size=256 --optimize-for-size dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:db": "vitest run tests/db",
+    "test:routes": "vitest run tests/routes",
+    "test:scheduler": "vitest run tests/scheduler",
+    "test:e2e": "vitest run tests/e2e",
+    "test:frontend": "vitest run tests/frontend",
+    "test:perf": "vitest run tests/perf"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.1",
+    "express": "^4.21.0",
+    "express-rate-limit": "^8.3.2",
+    "helmet": "^8.1.0",
+    "node-cron": "^4.2.1",
+    "pg": "^8.20.0",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0",
+    "@whiskeysockets/baileys": "^6.7.21",
+    "@hapi/boom": "^10.0.1",
+    "pino": "^9.5.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/compression": "^1.8.1",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.0",
+    "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.20.0",
+    "@types/qrcode": "^1.5.6",
+    "@types/supertest": "^7.2.0",
+    "supertest": "^7.2.2",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.4"
+  }
+}

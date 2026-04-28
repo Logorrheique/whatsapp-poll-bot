@@ -1,0 +1,89 @@
+name: Restore Poll Bot
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environnement cible"
+        type: choice
+        options:
+          - production
+          - preproduction
+        required: true
+      action:
+        description: "Action à effectuer"
+        type: choice
+        options:
+          - list
+          - restore
+        default: "list"
+        required: true
+      backup_id:
+        description: "ID du backup à restaurer (obligatoire si action = restore)"
+        required: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Définir l'URL
+        id: url
+        run: |
+          if [ "${{ inputs.environment }}" = "production" ]; then
+            echo "base=https://poll-bot-whatsapp-production.up.railway.app/api/backup-trigger" >> "$GITHUB_OUTPUT"
+          else
+            echo "base=https://poll-bot-whatsapp-preproduction.up.railway.app/api/backup-trigger" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Lister les backups
+        if: inputs.action == 'list'
+        env:
+          BACKUP_URL: ${{ steps.url.outputs.base }}/list
+          BACKUP_SECRET: ${{ secrets.BACKUP_TRIGGER_SECRET }}
+        run: |
+          set -e
+          echo "GET $BACKUP_URL"
+          response=$(curl -fsS "$BACKUP_URL" \
+            -H "x-backup-secret: $BACKUP_SECRET")
+
+          echo "$response" | jq '.'
+
+          {
+            echo "## 📋 Backups disponibles (${{ inputs.environment }})"
+            echo ""
+            echo "| ID | Date | Taille | Label |"
+            echo "|---|---|---|---|"
+            echo "$response" | jq -r '.[] | "| `\(.id)` | \(.created_at) | \(.size_bytes) bytes | \(.label // "-") |"'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Vérifier l'ID du backup
+        if: inputs.action == 'restore' && inputs.backup_id == ''
+        run: |
+          echo "::error::L'ID du backup est obligatoire pour un restore. Lance d'abord avec action=list pour voir les IDs disponibles."
+          exit 1
+
+      - name: Restaurer le backup
+        if: inputs.action == 'restore' && inputs.backup_id != ''
+        env:
+          BACKUP_URL: ${{ steps.url.outputs.base }}/${{ inputs.backup_id }}/restore
+          BACKUP_SECRET: ${{ secrets.BACKUP_TRIGGER_SECRET }}
+        run: |
+          set -e
+          echo "⚠️  RESTORE backup #${{ inputs.backup_id }} sur ${{ inputs.environment }}"
+          echo "POST $BACKUP_URL"
+
+          response=$(curl -fsS -X POST "$BACKUP_URL" \
+            -H "x-backup-secret: $BACKUP_SECRET")
+
+          echo "Response: $response"
+
+          {
+            echo "## ⚠️ Restore effectué (${{ inputs.environment }})"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Environment | \`${{ inputs.environment }}\` |"
+            echo "| Backup ID | \`${{ inputs.backup_id }}\` |"
+            echo ""
+            echo "> Le service va redémarrer automatiquement. La session WhatsApp peut nécessiter un re-jumelage si le backup est ancien."
+          } >> "$GITHUB_STEP_SUMMARY"

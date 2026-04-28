@@ -1,0 +1,365 @@
+name: Tests
+
+on:
+  push:
+    branches: [preproduction, master]
+  pull_request:
+    branches: [preproduction, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+# 6 jobs tests en parallele + 1 job issue-report qui agrege les echecs et
+# ouvre/met-a-jour/ferme des issues GitHub avec le tag "test-failure".
+
+jobs:
+  build:
+    name: Build TypeScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+  unit:
+    name: Tests unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run unit tests
+        run: npx vitest run tests/unit --reporter=default --reporter=json --outputFile=test-results/unit.json
+        env:
+          TZ: Europe/Paris
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-unit
+          path: test-results/unit.json
+          retention-days: 7
+
+  db:
+    name: Tests DB
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run DB tests
+        run: npx vitest run tests/db --reporter=default --reporter=json --outputFile=test-results/db.json
+        env:
+          TZ: Europe/Paris
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-db
+          path: test-results/db.json
+          retention-days: 7
+
+  routes:
+    name: Tests routes HTTP
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run routes tests
+        run: npx vitest run tests/routes --reporter=default --reporter=json --outputFile=test-results/routes.json
+        env:
+          TZ: Europe/Paris
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-routes
+          path: test-results/routes.json
+          retention-days: 7
+
+  scheduler:
+    name: Tests scheduler
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run scheduler tests
+        run: npx vitest run tests/scheduler --reporter=default --reporter=json --outputFile=test-results/scheduler.json
+        env:
+          TZ: Europe/Paris
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-scheduler
+          path: test-results/scheduler.json
+          retention-days: 7
+
+  issue-report:
+    name: Issue report
+    needs: [unit, db, routes, scheduler]
+    if: always() && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all test results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-results-*
+          path: artifacts
+          merge-multiple: false
+
+      - name: Open / close issues for failing tests
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            // --- Config ---
+            const MAIN_LABEL = 'test-failure';
+            const AUTO_LABEL = 'automated';
+            const CATEGORIES = ['unit', 'db', 'routes', 'scheduler'];
+            const LABEL_COLOR = 'b60205';
+            const AUTO_COLOR = 'ededed';
+
+            // --- Ensure labels exist (idempotent) ---
+            const ensureLabel = async (name, color, description) => {
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name,
+                  color,
+                  description,
+                });
+                core.info(`✓ Label créé : ${name}`);
+              } catch (e) {
+                if (e.status !== 422) throw e;
+              }
+            };
+            await ensureLabel(MAIN_LABEL, LABEL_COLOR, 'Test CI en échec (auto)');
+            await ensureLabel(AUTO_LABEL, AUTO_COLOR, 'Automatisé par workflow CI');
+            for (const cat of CATEGORIES) {
+              await ensureLabel(`${MAIN_LABEL}:${cat}`, LABEL_COLOR, `Test ${cat} en échec`);
+            }
+
+            // --- Parse vitest json outputs ---
+            const failing = [];
+            const artifactsDir = 'artifacts';
+            if (!fs.existsSync(artifactsDir)) {
+              core.warning('Aucun artifact téléchargé');
+              return;
+            }
+            for (const dir of fs.readdirSync(artifactsDir)) {
+              const m = dir.match(/^test-results-(.+)$/);
+              if (!m) continue;
+              const category = m[1];
+              const resultDir = path.join(artifactsDir, dir);
+              const files = fs.readdirSync(resultDir).filter(f => f.endsWith('.json'));
+              for (const f of files) {
+                const full = path.join(resultDir, f);
+                let data;
+                try {
+                  data = JSON.parse(fs.readFileSync(full, 'utf-8'));
+                } catch (err) {
+                  core.warning(`JSON invalide ${full} : ${err.message}`);
+                  continue;
+                }
+                for (const suite of data.testResults || []) {
+                  for (const test of suite.assertionResults || []) {
+                    if (test.status === 'failed') {
+                      failing.push({
+                        category,
+                        fullName: test.fullName || (test.ancestorTitles || []).concat(test.title || '').join(' > '),
+                        title: test.title || '',
+                        file: (suite.name || '').replace(/^.*\/tests\//, 'tests/'),
+                        message: (test.failureMessages || []).join('\n').slice(0, 4000),
+                      });
+                    }
+                  }
+                }
+              }
+            }
+
+            core.info(`Tests en échec détectés : ${failing.length}`);
+
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const shortSha = context.sha.slice(0, 7);
+
+            const buildTitle = (t) => `[TEST FAILURE] ${t.category} — ${t.fullName}`;
+            const buildBody = (t) => [
+              `**🏷️ Catégorie:** \`${t.category}\``,
+              `**📄 Fichier:** \`${t.file}\``,
+              `**🔖 Test:** \`${t.fullName}\``,
+              `**🔗 CI run:** ${runUrl}`,
+              `**📝 Commit:** \`${shortSha}\``,
+              ``,
+              `**Erreur:**`,
+              '```',
+              t.message || '(pas de message)',
+              '```',
+              ``,
+              `---`,
+              `*Issue auto-créée par \`.github/workflows/test.yml\` job \`issue-report\`. Se referme automatiquement quand le test repasse vert.*`,
+            ].join('\n');
+
+            // --- Create or update issues ---
+            const failingTitles = new Set();
+            for (const t of failing) {
+              const title = buildTitle(t);
+              failingTitles.add(title);
+              const body = buildBody(t);
+
+              const search = await github.rest.search.issuesAndPullRequests({
+                q: `repo:${context.repo.owner}/${context.repo.repo} is:issue is:open label:"${MAIN_LABEL}" in:title "${title.replace(/"/g, '\\"')}"`,
+              });
+              const match = (search.data.items || []).find(i => i.title === title);
+
+              if (match) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: match.number,
+                  body: `🔁 **Toujours en échec** sur [run #${context.runId}](${runUrl}) (commit \`${shortSha}\`)\n\n\`\`\`\n${t.message || '(pas de message)'}\n\`\`\``,
+                });
+                core.info(`↻ Update issue #${match.number} pour ${title}`);
+              } else {
+                const created = await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title,
+                  body,
+                  labels: [MAIN_LABEL, `${MAIN_LABEL}:${t.category}`, AUTO_LABEL],
+                });
+                core.info(`✓ Issue créée #${created.data.number} : ${title}`);
+              }
+            }
+
+            // --- Auto-close resolved issues ---
+            const receivedCategories = new Set(
+              fs.existsSync(artifactsDir)
+                ? fs.readdirSync(artifactsDir)
+                    .map(d => (d.match(/^test-results-(.+)$/) || [])[1])
+                    .filter(Boolean)
+                : []
+            );
+            const allCategoriesPresent = CATEGORIES.every(c => receivedCategories.has(c));
+
+            if (allCategoriesPresent) {
+              const openIssues = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                labels: MAIN_LABEL,
+                per_page: 100,
+              });
+              for (const issue of openIssues.data) {
+                if (failingTitles.has(issue.title)) continue;
+                const m = issue.title.match(/^\[TEST FAILURE\] (\w+) — /);
+                if (!m) continue;
+                if (!receivedCategories.has(m[1])) continue;
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `✅ **Test résolu** sur [run #${context.runId}](${runUrl}) (commit \`${shortSha}\`) — fermeture automatique.`,
+                });
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: 'closed',
+                  state_reason: 'completed',
+                });
+                core.info(`✓ Fermé issue #${issue.number} : ${issue.title}`);
+              }
+            } else {
+              core.warning(
+                `Auto-close desactive : categories manquantes ${CATEGORIES.filter(c => !receivedCategories.has(c)).join(', ')}`
+              );
+            }
+
+            // --- Compteurs détaillés par catégorie (remplace l'ancien rapport coverage) ---
+            // Parcourt une 2e fois les artifacts pour compter passed/failed/skipped
+            // par catégorie. Sert à afficher un tableau récap dans le Step Summary.
+            const stats = {};
+            for (const dir of fs.readdirSync(artifactsDir)) {
+              const m = dir.match(/^test-results-(.+)$/);
+              if (!m) continue;
+              const category = m[1];
+              stats[category] = { passed: 0, failed: 0, skipped: 0, total: 0, files: 0 };
+              const resultDir = path.join(artifactsDir, dir);
+              for (const f of fs.readdirSync(resultDir).filter(f => f.endsWith('.json'))) {
+                let data;
+                try { data = JSON.parse(fs.readFileSync(path.join(resultDir, f), 'utf-8')); }
+                catch { continue; }
+                stats[category].files += (data.testResults || []).length;
+                for (const suite of data.testResults || []) {
+                  for (const test of suite.assertionResults || []) {
+                    stats[category].total++;
+                    if (test.status === 'passed') stats[category].passed++;
+                    else if (test.status === 'failed') stats[category].failed++;
+                    else stats[category].skipped++;
+                  }
+                }
+              }
+            }
+            const grandTotal = Object.values(stats).reduce((acc, s) => ({
+              passed: acc.passed + s.passed,
+              failed: acc.failed + s.failed,
+              skipped: acc.skipped + s.skipped,
+              total: acc.total + s.total,
+              files: acc.files + s.files,
+            }), { passed: 0, failed: 0, skipped: 0, total: 0, files: 0 });
+
+            // --- Summary ---
+            const summary = [
+              '## 🧪 Rapport tests',
+              '',
+              `**${grandTotal.passed} passés** / **${grandTotal.failed} échoués** / **${grandTotal.skipped} skippés** sur ${grandTotal.total} tests (${grandTotal.files} fichiers)`,
+              '',
+              '| Catégorie | Fichiers | Total | ✅ Passés | ❌ Échoués | ⏭️ Skippés |',
+              '|---|---:|---:|---:|---:|---:|',
+            ];
+            for (const [cat, s] of Object.entries(stats)) {
+              summary.push(`| ${cat} | ${s.files} | ${s.total} | ${s.passed} | ${s.failed} | ${s.skipped} |`);
+            }
+            summary.push('');
+            summary.push(`- Catégories reçues : ${[...receivedCategories].join(', ') || 'aucune'}`);
+            summary.push(`- Tags utilisés : \`${MAIN_LABEL}\`, \`${MAIN_LABEL}:{catégorie}\`, \`${AUTO_LABEL}\``);
+            summary.push('');
+            if (failing.length > 0) {
+              summary.push('### Tests en échec');
+              for (const t of failing) {
+                summary.push(`- **${t.category}** · \`${t.fullName}\``);
+              }
+            }
+            await core.summary.addRaw(summary.join('\n')).write();

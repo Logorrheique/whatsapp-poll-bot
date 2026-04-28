@@ -1,0 +1,81 @@
+name: Backup Poll Bot
+
+on:
+  # Manual trigger — disponible depuis l'onglet Actions pour tester sur
+  # n'importe quelle branche (preproduction comprise).
+  workflow_dispatch:
+    inputs:
+      label:
+        description: "Label du backup (optionnel)"
+        required: false
+        default: "github-actions"
+      environment:
+        description: "Environnement cible"
+        type: choice
+        options:
+          - production
+          - preproduction
+        default: "production"
+
+  # Schedule : tous les 5 jours à 3h UTC.
+  # /!\ GitHub Actions ne lance les schedules QUE depuis la branche par
+  # défaut (master). Le cron backup donc les DEUX environnements
+  # automatiquement via la matrice ci-dessous.
+  schedule:
+    - cron: "0 3 */5 * *"
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - env_name: production
+            url: https://poll-bot-whatsapp-production.up.railway.app/api/backup-trigger
+          - env_name: preproduction
+            url: https://poll-bot-whatsapp-preproduction.up.railway.app/api/backup-trigger
+      fail-fast: false
+
+    name: "Backup ${{ matrix.env_name }}"
+    steps:
+      - name: Déclencher le backup
+        # Sur schedule → les deux environnements tournent
+        # Sur workflow_dispatch → seul l'environnement choisi tourne
+        if: >-
+          github.event_name == 'schedule' ||
+          matrix.env_name == github.event.inputs.environment
+        env:
+          BACKUP_URL: ${{ matrix.url }}
+          BACKUP_SECRET: ${{ secrets.BACKUP_TRIGGER_SECRET }}
+          LABEL: ${{ github.event.inputs.label || 'github-actions' }}
+          ENV_NAME: ${{ matrix.env_name }}
+        run: |
+          set -e
+          if [ -z "$BACKUP_SECRET" ]; then
+            echo "::error::Le secret BACKUP_TRIGGER_SECRET n'est pas configuré dans le repo"
+            exit 1
+          fi
+
+          echo "POST $BACKUP_URL (label=$LABEL, env=$ENV_NAME)"
+          response=$(curl -fsS -X POST "$BACKUP_URL" \
+            -H "x-backup-secret: $BACKUP_SECRET" \
+            -H "Content-Type: application/json" \
+            -d "{\"label\":\"$LABEL\"}")
+
+          echo "Response: $response"
+
+          # Extraire les infos pour le summary
+          id=$(echo "$response" | jq -r '.id // "?"')
+          size=$(echo "$response" | jq -r '.size // "?"')
+
+          {
+            echo "## ✅ Backup créé ($ENV_NAME)"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Environment | \`$ENV_NAME\` |"
+            echo "| ID | \`$id\` |"
+            echo "| Size | $size bytes |"
+            echo "| Label | \`$LABEL\` |"
+            echo "| Trigger | ${{ github.event_name }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

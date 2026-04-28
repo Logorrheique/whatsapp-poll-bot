@@ -1,0 +1,30 @@
+node_modules
+dist
+.wwebjs_auth
+.wwebjs_cache
+.env
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# Docs et markdown : pas besoin dans l'image runtime.
+*.md
+docs/
+
+# Sources de dev / CI : inutiles dans l'image prod.
+tests/
+coverage/
+.github/
+.vscode/
+.idea/
+.agents/
+.claude/
+
+# Git et config locale
+.git
+.gitignore
+skills-lock.json
+
+# Lockfile tests écrit au runtime des tests locaux (ne devrait pas leaker)
+*.log
+.DS_Store

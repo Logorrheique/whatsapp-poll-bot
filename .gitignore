@@ -1,0 +1,17 @@
+node_modules/
+dist/
+data/
+.env
+.env.ibm
+.wwebjs_auth/
+.wwebjs_cache/
+docs/
+.idea/
+mobile/
+
+# Local-only (per-developer)
+CLAUDE.md
+.claude/
+.agents/
+coverage/
+skills-lock.json

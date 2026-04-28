@@ -1,0 +1,2678 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#111B21">
+  <title>Poll Bot</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Crect x='7' y='18' width='4' height='8' rx='1' fill='%23fff'/%3E%3Crect x='14' y='12' width='4' height='14' rx='1' fill='%23fff'/%3E%3Crect x='21' y='6' width='4' height='20' rx='1' fill='%23fff'/%3E%3C/svg%3E">
+  <style>
+    /* ============================
+       Refonte N°2 — COMFORT
+       Light gray bg + indigo accent + soft shadows + rounded cards
+       ============================ */
+    :root {
+      /* Legacy variable names kept for compatibility with existing HTML/JS */
+      --g: #4f46e5;              /* primary accent (indigo) */
+      --bg: #f8fafc;             /* page background (slate-50) */
+      --bg2: #ffffff;            /* topbar / nav surface */
+      --card: #ffffff;           /* cards */
+      --border: #e2e8f0;         /* borders (slate-200) */
+      --text: #0f172a;           /* main text (slate-900) */
+      --muted: #64748b;          /* secondary text (slate-500) */
+      --input: #f1f5f9;          /* input bg (slate-100) */
+      --red: #dc2626;            /* danger */
+      --orange: #d97706;         /* warning / admin */
+      --radius: 14px;
+
+      /* Extra palette for new component states */
+      --dim: #94a3b8;            /* slate-400 */
+      --accent: #4f46e5;         /* indigo-600 */
+      --accent-soft: #eef2ff;    /* indigo-50 */
+      --accent-text: #3730a3;    /* indigo-800 */
+      --green: #16a34a;          /* status active */
+      --green-soft: #dcfce7;
+      --blue: #2563eb;           /* status sent */
+      --blue-soft: #dbeafe;
+      --amber-soft: #fef3c7;
+
+      --shadow-sm: 0 1px 2px rgba(15,23,42,0.04), 0 1px 3px rgba(15,23,42,0.06);
+      --shadow:    0 4px 12px rgba(15,23,42,0.05), 0 1px 3px rgba(15,23,42,0.06);
+      --shadow-lg: 0 12px 30px rgba(15,23,42,0.10);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      overflow-x: hidden;
+      letter-spacing: -0.005em;
+      font-size: 15px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* --- Shared --- */
+    .card {
+      background: var(--card);
+      border-radius: 18px;
+      padding: 20px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow);
+    }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px; font-weight: 600;
+      cursor: pointer;
+      transition: all .15s;
+      width: 100%;
+      font-family: inherit;
+      letter-spacing: -0.005em;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn-primary {
+      background: var(--accent); color: #fff;
+      box-shadow: 0 8px 20px rgba(79,70,229,0.25);
+    }
+    .btn-primary:hover { filter: brightness(0.95); }
+    .btn-secondary { background: var(--input); color: var(--text); }
+    .btn-secondary:hover { background: var(--border); }
+    .btn-danger {
+      background: var(--red); color: #fff;
+      box-shadow: 0 8px 20px rgba(220,38,38,0.18);
+    }
+    .btn-sm { padding: 9px 16px; font-size: 13px; width: auto; border-radius: 99px; font-weight: 500; }
+    .btn-sm.btn-primary { font-weight: 600; }
+    .btn:disabled { opacity: .5; pointer-events: none; cursor: not-allowed; }
+
+    /* Spinner */
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 6px; }
+    .spinner-lg { width: 24px; height: 24px; border-width: 3px; margin: 0; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .qr-pulse { display: inline-block; animation: qrpulse 1.4s ease-in-out infinite; color: var(--g); }
+    @keyframes qrpulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+    /* Full card loader */
+    .loader-box { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; color: var(--muted); gap: 10px; font-size: 13px; }
+    .loader-box .spinner-lg { width: 26px; height: 26px; border-width: 3px; margin: 0; color: var(--accent); }
+
+    /* Group pill inside result cards */
+    .group-pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; background: var(--accent-soft); color: var(--accent-text); border-radius: 99px; font-size: 11px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .group-pill svg { flex-shrink: 0; }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 12px 14px;
+      background: #fff;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font-size: 15px;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+      -webkit-appearance: none;
+      font-family: inherit;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px rgba(79,70,229,0.1);
+    }
+    input::placeholder { color: var(--dim); }
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+    }
+    select[multiple] { min-height: 100px; background-image: none; padding-right: 14px; }
+
+    /* Checkbox group list */
+    .check-list {
+      max-height: 280px; overflow-y: auto;
+      background: #fff;
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 6px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .check-item { display: flex; align-items: center; padding: 12px 12px; border-radius: 10px; cursor: pointer; gap: 12px; transition: background .15s; user-select: none; margin-bottom: 2px; }
+    .check-item:active { background: var(--input); }
+    .check-item.checked { background: var(--accent-soft); }
+    .check-item .check-box {
+      width: 22px; height: 22px; border-radius: 6px;
+      border: 2px solid var(--dim);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: all .15s;
+    }
+    .check-item.checked .check-box { background: var(--accent); border-color: var(--accent); }
+    .check-item .check-box svg { width: 14px; height: 14px; opacity: 0; transition: opacity .15s; stroke: #fff !important; }
+    .check-item.checked .check-box svg { opacity: 1; }
+    .check-item .check-label { flex: 1; font-size: 15px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .check-item .check-count { font-size: 12px; color: var(--muted); flex-shrink: 0; padding: 3px 10px; background: var(--input); border-radius: 99px; font-weight: 600; }
+    .check-item.checked .check-count { color: var(--accent-text); background: #fff; }
+    .check-list-empty { padding: 16px; text-align: center; color: var(--muted); font-size: 13px; }
+
+    /* Today big count card */
+    .today-card {
+      background: #fff;
+      border-radius: 18px;
+      padding: 22px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow);
+      border-left: 4px solid var(--accent);
+    }
+    .today-card .question { font-size: 17px; font-weight: 600; margin-bottom: 4px; letter-spacing: -0.01em; }
+    .today-card .meta { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
+    .today-card .big-count { font-size: 52px; font-weight: 800; line-height: 1; color: var(--accent); margin-bottom: 4px; letter-spacing: -0.03em; }
+    .today-card .big-label { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+    .today-options { display: flex; flex-direction: column; gap: 6px; }
+    .today-opt { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--input); border-radius: 10px; font-size: 14px; }
+    .today-opt-name { color: var(--text); font-weight: 500; }
+    .today-opt-count { font-weight: 700; color: var(--accent); font-size: 16px; }
+    .today-opt.zero .today-opt-count { color: var(--muted); }
+    .today-voters { font-size: 11px; color: var(--muted); margin-top: 4px; padding: 0 14px; }
+
+    .today-empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .today-empty svg { width: 48px; height: 48px; opacity: .3; margin-bottom: 12px; }
+
+    /* Day filter chips */
+    .day-chips { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0 10px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .day-chips::-webkit-scrollbar { display: none; }
+    .day-chip {
+      flex: 0 0 auto; min-width: 54px; padding: 10px 10px;
+      background: #fff;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      cursor: pointer; text-align: center;
+      transition: all .15s;
+      box-shadow: var(--shadow-sm);
+    }
+    .day-chip:active { transform: scale(.95); }
+    .day-chip.today { border-color: var(--accent); }
+    .day-chip.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 8px 20px rgba(79,70,229,0.25);
+    }
+    .day-chip.active .day-name { color: #fff; }
+    .day-name { display: block; font-size: 13px; color: var(--text); text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px; }
+
+    /* Day-of-week toggle chips (for custom schedule) */
+    .day-toggle { flex: 1; min-width: 40px; padding: 11px 4px; background: #fff; border: 1.5px solid var(--border); border-radius: 10px; text-align: center; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; user-select: none; transition: all .15s; }
+    .day-toggle:active { transform: scale(.95); }
+    .day-toggle.selected { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 4px 12px rgba(79,70,229,0.25); }
+
+    /* Single switch */
+    .switch-row { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: #fff; border: 1px solid var(--border); border-radius: 14px; cursor: pointer; }
+    .switch-row .switch-text { flex: 1; }
+    .switch-row .switch-text strong { font-size: 15px; display: block; margin-bottom: 2px; font-weight: 600; }
+    .switch-row .switch-text small { font-size: 12px; color: var(--muted); }
+    .switch { position: relative; width: 44px; height: 26px; background: var(--border); border-radius: 13px; transition: background .2s; flex-shrink: 0; }
+    .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; background: #fff; border-radius: 50%; transition: transform .2s; box-shadow: 0 2px 4px rgba(0,0,0,0.15); }
+    .switch.on { background: var(--accent); }
+    .switch.on::after { transform: translateX(18px); }
+
+    label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 13px; font-weight: 500; }
+    .form-group { margin-bottom: 16px; }
+
+    /* Question field with chip (contenteditable) */
+    .m-question-ce {
+      width: 100%;
+      min-height: 44px;
+      padding: 10px 12px;
+      background: #ffffff;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--text);
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+      cursor: text;
+      overflow-wrap: anywhere;
+    }
+    .m-question-ce:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px rgba(79,70,229,0.1);
+    }
+    .m-question-ce:empty::before {
+      content: attr(data-placeholder);
+      color: var(--muted);
+      pointer-events: none;
+    }
+    .day-chip-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--accent-soft);
+      color: var(--accent-text);
+      padding: 2px 4px 2px 10px;
+      border-radius: 99px;
+      font-size: 13px;
+      font-weight: 600;
+      user-select: none;
+      white-space: nowrap;
+      vertical-align: middle;
+      margin: 0 2px;
+    }
+    .day-chip-inline > button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      font-size: 13px;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      font-weight: 700;
+    }
+    .day-chip-inline > button:hover { background: #3730a3; }
+    h2 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; color: var(--text); }
+    h3 { font-size: 17px; font-weight: 600; margin-bottom: 10px; letter-spacing: -0.015em; color: var(--text); }
+    h4 { font-weight: 600; letter-spacing: -0.01em; color: var(--text); }
+
+    /* Badges */
+    .badge { display: inline-block; padding: 4px 11px; border-radius: 99px; font-size: 12px; font-weight: 600; letter-spacing: -0.005em; }
+    .badge-on { background: var(--green-soft); color: #15803d; }
+    .badge-off { background: #fee2e2; color: #991b1b; }
+    .badge-admin { background: var(--amber-soft); color: #92400e; }
+    .badge-viewer { background: var(--input); color: var(--muted); }
+    .badge-user { background: var(--accent-soft); color: var(--accent-text); }
+
+    /* Online rows */
+    .online-row { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+    .online-row:last-child { border-bottom: none; }
+    .online-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); flex-shrink: 0; box-shadow: 0 0 0 3px rgba(22,163,74,0.18); }
+    .online-info { flex: 1; min-width: 0; }
+    .online-phone { font-size: 14px; font-weight: 500; color: var(--text); }
+    .online-time { font-size: 11px; color: var(--muted); }
+
+    /* Toast */
+    .toast { position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%); padding: 12px 22px; border-radius: 99px; font-size: 14px; font-weight: 600; z-index: 9999; animation: pop .25s ease; white-space: nowrap; box-shadow: var(--shadow-lg); }
+    .toast-ok { background: var(--accent); color: #fff; }
+    .toast-err { background: var(--red); color: #fff; }
+    @keyframes pop { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+    .empty { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 14px; }
+
+    /* --- Login --- */
+    #login { display: flex; align-items: center; justify-content: center; min-height: 100dvh; padding: 20px; background: var(--bg); }
+    #login .card { max-width: 380px; width: 100%; text-align: center; padding: 28px; border-radius: 20px; box-shadow: var(--shadow-lg); }
+    #login h2 { margin-bottom: 4px; font-size: 26px; }
+    #login .sub { color: var(--muted); font-size: 14px; margin-bottom: 22px; }
+    .code-input { letter-spacing: 10px; font-size: 28px; text-align: center; font-weight: 700; font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+    .login-link { color: var(--accent); font-size: 13px; text-decoration: none; font-weight: 500; }
+    .login-link:hover { text-decoration: underline; }
+
+    /* --- App shell --- */
+    #app { display: none; padding-bottom: 84px; }
+    .topbar {
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: saturate(180%) blur(12px);
+      -webkit-backdrop-filter: saturate(180%) blur(12px);
+      padding: 14px 18px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.015em; }
+    .topbar .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+    .dot-on { background: var(--green); box-shadow: 0 0 0 3px rgba(22,163,74,0.18); }
+    .dot-off { background: var(--red); box-shadow: 0 0 0 3px rgba(220,38,38,0.18); }
+
+    /* Bottom nav — floating pill */
+    .nav {
+      position: fixed;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 8px;
+      display: flex;
+      gap: 4px;
+      z-index: 100;
+      box-shadow: 0 14px 40px rgba(15,23,42,0.12);
+      max-width: calc(100% - 24px);
+    }
+    .nav-item {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 10px 20px;
+      border-radius: 99px;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 11px; font-weight: 600;
+      transition: all .15s;
+      gap: 3px;
+      min-width: 60px;
+    }
+    .nav-item.active { background: var(--accent); color: #fff; }
+    .nav-item svg { width: 20px; height: 20px; }
+
+    .page { display: none; padding: 16px 18px; max-width: 620px; margin: 0 auto; }
+    .page.active { display: block; }
+
+    /* --- Poll list — Comfort-style cards --- */
+    .poll-card {
+      background: #fff;
+      border-radius: 18px;
+      padding: 20px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow);
+      border-left: 4px solid var(--accent);
+    }
+    .poll-card.inactive { border-left-color: var(--dim); opacity: 0.75; }
+    .poll-card h4 { font-size: 17px; margin-bottom: 6px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; }
+    .poll-meta { color: var(--muted); font-size: 13px; margin-bottom: 12px; line-height: 1.5; }
+    .poll-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .poll-actions .btn-sm { flex: 0 0 auto; }
+
+    /* --- Results bars --- */
+    .bar-wrap { margin-bottom: 14px; }
+    .bar-label { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 6px; font-weight: 500; }
+    .bar-track { background: var(--input); border-radius: 99px; height: 30px; overflow: hidden; }
+    .bar-fill {
+      background: linear-gradient(90deg, var(--accent), #6366f1);
+      height: 100%;
+      border-radius: 99px;
+      display: flex; align-items: center;
+      padding-left: 14px;
+      font-size: 13px; font-weight: 700;
+      color: #fff;
+      transition: width .3s;
+      min-width: 36px;
+    }
+    .bar-voters { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+    /* --- Options builder --- */
+    .opt-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .opt-row input { flex: 1; }
+    .opt-del { background: var(--input); border: none; color: var(--red); font-size: 20px; cursor: pointer; padding: 10px 12px; border-radius: 10px; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; }
+    .opt-del:hover { background: #fee2e2; }
+
+    /* --- Schedule builder --- */
+    .sched-row { display: flex; gap: 8px; }
+    .sched-row > * { flex: 1; }
+
+    /* --- Whitelist --- */
+    .wl-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+    .wl-item:last-child { border-bottom: none; }
+
+    /* --- Modal --- */
+    .modal-bg {
+      display: none; position: fixed; inset: 0;
+      background: rgba(15,23,42,0.55);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: 200;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .modal-bg.show { display: flex; }
+    .modal {
+      background: #fff;
+      border-radius: 24px 24px 0 0;
+      width: 100%;
+      max-width: 620px;
+      max-height: 85dvh;
+      overflow-y: auto;
+      padding: 22px 20px;
+      padding-bottom: calc(22px + env(safe-area-inset-bottom));
+      box-shadow: 0 -20px 60px rgba(15,23,42,0.25);
+    }
+    .modal-handle { width: 40px; height: 5px; background: var(--dim); border-radius: 99px; margin: 0 auto 18px; }
+  </style>
+</head>
+<body>
+
+<!-- ===== LOGIN ===== -->
+<div id="login">
+  <div class="card">
+    <div style="display:flex;justify-content:center;margin-bottom:12px">
+      <svg width="56" height="56" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#4f46e5"/><rect x="7" y="18" width="4" height="8" rx="1" fill="#fff"/><rect x="14" y="12" width="4" height="14" rx="1" fill="#fff"/><rect x="21" y="6" width="4" height="20" rx="1" fill="#fff"/></svg>
+    </div>
+    <h2>Poll Bot</h2>
+    <p class="sub">Sondages WhatsApp automatises</p>
+    <p id="app-version-login" style="font-size:10px;color:var(--muted);opacity:0.5;margin:0"></p>
+
+    <div id="s-role">
+      <p style="color:var(--muted);font-size:14px;margin-bottom:16px">Choisissez votre mode de connexion</p>
+      <button class="btn btn-primary" style="margin-bottom:10px" onclick="pickRole('admin')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><path d="M12 1l3 6 6 1-4.5 4.5L18 19l-6-3-6 3 1.5-6.5L3 8l6-1z"/></svg>
+        Administrateur
+      </button>
+      <button class="btn btn-secondary" onclick="pickRole('viewer')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        Observateur
+      </button>
+      <p style="color:var(--muted);font-size:11px;margin-top:14px">
+        Admin: gerer les sondages &bull; Observateur: consulter uniquement
+      </p>
+    </div>
+
+    <div id="s-wait" style="display:none">
+      <div class="loader-box" style="padding:30px 20px">
+        <div class="spinner spinner-lg"></div>
+        <p style="margin:0">Chargement de Poll Bot...</p>
+        <p style="margin:0;font-size:11px;opacity:0.7">Connexion a WhatsApp Web, cela peut prendre jusqu'a 1 minute.</p>
+        <p style="margin:10px 0 0;font-size:11px;opacity:0.5">Si rien ne s'affiche, <a href="#" onclick="event.preventDefault();location.reload()" style="color:inherit;text-decoration:underline">rechargez la page</a>.</p>
+        <p id="s-wait-reload-msg" style="display:none;margin:10px 0 0;font-size:11px;opacity:0.7">Rechargement automatique dans <span id="s-wait-countdown"></span>s...</p>
+      </div>
+    </div>
+
+    <div id="s-noaccess" style="display:none">
+      <p style="color:var(--red);font-size:14px;padding:20px 0">WhatsApp n'est pas encore lie au bot.<br>Contactez l'administrateur.</p>
+      <button class="btn btn-secondary" onclick="showStep('s-role')">Retour</button>
+    </div>
+
+    <div id="s-qr-secret" style="display:none">
+      <p id="qr-role-label-2" style="color:var(--g);font-size:13px;font-weight:600;margin-bottom:10px">Mode: Admin</p>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:12px">WhatsApp non lie. Entrez le secret de jumelage pour lier le bot.</p>
+      <div class="form-group">
+        <label>Secret de jumelage</label>
+        <input type="password" id="f-pair-secret" placeholder="Secret">
+      </div>
+      <button class="btn btn-primary" onclick="validatePairSecret()">Continuer</button>
+      <p style="margin-top:10px"><a href="#" class="login-link" onclick="showStep('s-role');return false">← Changer de mode</a></p>
+    </div>
+
+    <div id="s-qr" style="display:none">
+      <p id="qr-role-label" style="color:var(--g);font-size:13px;font-weight:600;margin-bottom:8px">Mode: Admin</p>
+      <h2 style="font-size:18px;font-weight:600;margin-bottom:10px">Lier le bot à WhatsApp</h2>
+      <div style="background:rgba(255,193,7,0.12);border:1px solid rgba(255,193,7,0.3);border-radius:8px;padding:10px;margin-bottom:14px">
+        <p style="color:var(--y,#ffc107);font-size:12px;font-weight:600;margin-bottom:4px">⚠️ Première connexion</p>
+        <p style="color:var(--muted);font-size:12px;line-height:1.5;margin:0">
+          Il te faut <strong>deux appareils</strong> : un pour afficher ce QR (cet écran) et un autre pour le scanner avec WhatsApp.
+        </p>
+      </div>
+      <img id="qr-img" style="border-radius:10px;width:80%;max-width:320px;margin:0 auto 14px;display:block;background:#fff;padding:6px" />
+      <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:10px">
+        <p style="color:var(--g);font-size:12px;font-weight:600;margin-bottom:8px">📱 Depuis le téléphone du bot :</p>
+        <ol style="color:var(--muted);font-size:13px;text-align:left;line-height:1.7;padding-left:18px;margin:0">
+          <li>Ouvre <strong>WhatsApp</strong> sur le téléphone du compte bot</li>
+          <li><strong>Paramètres</strong> &rarr; <strong>Appareils liés</strong></li>
+          <li>Tap <strong>"Lier un appareil"</strong></li>
+          <li>Sélectionne <strong>"Lier avec un autre appareil"</strong> si demandé</li>
+          <li><strong>Scanne le QR ci-dessus</strong> depuis cet écran avec la caméra de ton téléphone</li>
+        </ol>
+      </div>
+      <div id="qr-waiting-indicator" style="color:var(--g);font-size:12px;text-align:center;margin-top:8px">
+        <span class="qr-pulse">●</span> En attente de scan…
+      </div>
+      <p style="margin-top:14px;font-size:11px;color:var(--muted);text-align:center">
+        <a href="#" class="login-link" onclick="showStep('s-role');return false">← Changer de mode</a>
+      </p>
+    </div>
+
+    <div id="s-phone" style="display:none">
+      <p id="phone-role-label" style="color:var(--g);font-size:13px;font-weight:600;margin-bottom:10px">Mode: Admin</p>
+      <div class="form-group">
+        <label>Numero de telephone</label>
+        <input type="tel" id="f-phone" placeholder="33612345678">
+        <p style="color:var(--muted);font-size:11px;margin-top:6px">
+          Format: indicatif pays + numero sans le 0<br>
+          Exemple France: <strong style="color:var(--g)">33612345678</strong> (pour 06 12 34 56 78)
+        </p>
+      </div>
+      <button class="btn btn-primary" onclick="sendCode()">Recevoir le code</button>
+      <p style="color:var(--muted);font-size:12px;margin-top:8px">Code envoye par WhatsApp</p>
+      <p style="margin-top:10px"><a href="#" class="login-link" onclick="showStep('s-role');return false">← Changer de mode</a></p>
+    </div>
+
+    <div id="s-code" style="display:none">
+      <div class="form-group">
+        <label>Code a 6 chiffres</label>
+        <input type="text" id="f-code" class="code-input" maxlength="6" inputmode="numeric" placeholder="000000">
+        <button class="btn btn-secondary btn-sm" style="width:100%;margin-top:8px" onclick="pasteFromClipboard('f-code')">
+          <span style="display:inline-flex;align-items:center;gap:8px;justify-content:center">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+            Coller le code
+          </span>
+        </button>
+      </div>
+      <button class="btn btn-primary" onclick="checkCode()">Verifier</button>
+      <p style="margin-top:10px"><a href="#" class="login-link" onclick="showStep('s-phone');return false">Changer de numero</a></p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== APP ===== -->
+<div id="app">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:10px">
+      <svg width="28" height="28" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#4f46e5"/><rect x="7" y="18" width="4" height="8" rx="1" fill="#fff"/><rect x="14" y="12" width="4" height="14" rx="1" fill="#fff"/><rect x="21" y="6" width="4" height="20" rx="1" fill="#fff"/></svg>
+      <h1>Poll Bot</h1>
+      <span id="app-version-topbar" style="font-size:10px;color:var(--muted);opacity:0.5"></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span><span id="dot" class="status-dot dot-off"></span><span id="status-text" style="font-size:13px;color:var(--muted)">...</span></span>
+      <button class="btn btn-sm btn-secondary" onclick="doLogout()">Quitter</button>
+    </div>
+  </div>
+
+  <!-- Pages -->
+  <div id="p-results" class="page active">
+    <div id="res-view"></div>
+  </div>
+
+  <div id="p-home" class="page">
+    <h3 style="margin-bottom:14px">Sondages</h3>
+    <div id="poll-list"></div>
+    <button class="btn btn-primary" id="btn-new-poll" style="margin-top:12px" onclick="openCreate()">+ Nouveau sondage</button>
+  </div>
+
+  <div id="p-settings" class="page">
+    <h3>Parametres</h3>
+
+    <div class="card" id="wa-link-section" style="display:none">
+      <h3>Compte WhatsApp lie</h3>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Le bot envoie les sondages depuis ce compte</p>
+      <div id="wa-link-info" style="padding:12px;background:var(--bg2);border-radius:8px;margin-bottom:12px">
+        <div class="loader-box" style="padding:20px 10px"><div class="spinner spinner-lg"></div><p style="margin:0">Chargement...</p></div>
+      </div>
+      <button class="btn btn-danger" id="wa-unlink-btn" onclick="unlinkWhatsApp()" style="display:none">Delier ce compte</button>
+      <p id="wa-unlink-help" style="color:var(--muted);font-size:11px;margin-top:8px;display:none">
+        Delier permet de lier un autre compte WhatsApp pour l'envoi des sondages.
+      </p>
+    </div>
+
+    <div class="card" id="vw-section" style="display:none">
+      <h3>Observateurs</h3>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:8px">Acces lecture seule (voir les sondages et resultats, sans pouvoir modifier)</p>
+      <div style="display:flex;gap:8px;margin-bottom:6px">
+        <input type="tel" id="vw-input" placeholder="33612345678" style="flex:1" inputmode="numeric">
+        <button class="btn btn-sm btn-primary" onclick="addVw()">Ajouter</button>
+      </div>
+      <p style="color:var(--muted);font-size:11px;margin-bottom:14px">
+        Format: indicatif pays + numero sans le 0 &bull; Ex: <strong style="color:var(--g)">33612345678</strong>
+      </p>
+      <div id="vw-list"></div>
+    </div>
+
+    <div class="card" id="wl-section" style="display:none">
+      <h3>Numero autorise</h3>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Numeros autorises a se connecter</p>
+      <div id="wl-list"></div>
+    </div>
+
+    <div class="card" id="online-section" style="display:none">
+      <h3>En ligne maintenant</h3>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Utilisateurs actifs dans les 5 dernieres minutes</p>
+      <div id="online-list"></div>
+    </div>
+
+  </div>
+
+  <!-- Page Bibliothèque de phrases -->
+  <div id="p-library" class="page">
+    <h3>Bibliothèque de phrases</h3>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:12px">
+      Phrases utilisées par les sondages en mode aléatoire. Tirage à chaque envoi parmi les phrases enregistrées.
+    </p>
+
+    <div id="lib-status" style="margin-bottom:16px"></div>
+
+    <div class="card" style="margin-bottom:12px">
+      <h4 style="margin:0 0 8px 0;font-size:14px">+ Ajouter une phrase</h4>
+      <div class="form-group" style="margin-bottom:8px">
+        <label>Catégorie</label>
+        <select id="lib-cat">
+          <option value="yes">Oui (présent)</option>
+          <option value="no">Non (absent)</option>
+          <option value="quit">Je quitte le groupe</option>
+          <option value="injured">Non, je suis blessé (optionnel)</option>
+        </select>
+        <p style="font-size:11px;color:var(--muted);margin-top:6px">
+          ℹ️ Le titre du sondage est saisi directement dans le modal de création — la bibliothèque ne sert qu'aux options de réponse.
+        </p>
+      </div>
+      <div class="form-group" style="margin-bottom:8px">
+        <label>Texte</label>
+        <input type="text" id="lib-text" maxlength="200" placeholder="Ex : Oui je suis là">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="addLibPhrase()">Ajouter</button>
+    </div>
+
+    <div id="lib-list"></div>
+  </div>
+
+  <!-- Bottom Nav -->
+  <div class="nav">
+    <div class="nav-item active" onclick="go('p-results')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="12" width="4" height="9" rx="1"/><rect x="10" y="6" width="4" height="15" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/></svg>
+      Resultats
+    </div>
+    <div class="nav-item" onclick="go('p-home')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11H3v10h6V11z"/><path d="M21 3h-6v18h6V3z"/><path d="M15 8H9v13h6V8z"/></svg>
+      Sondages
+    </div>
+    <div class="nav-item" onclick="go('p-library')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+      Phrases
+    </div>
+    <div class="nav-item" onclick="go('p-settings')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Reglages
+    </div>
+  </div>
+</div>
+
+<!-- ===== CREATE/EDIT MODAL ===== -->
+<div id="modal-poll" class="modal-bg" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h3 id="modal-title">Nouveau sondage</h3>
+    <input type="hidden" id="m-id">
+
+    <div class="form-group">
+      <label>Jour d'entrainement</label>
+      <select id="m-training-day" onchange="onTrainingDayChange()">
+        <option value="">— Aucun (legacy) —</option>
+        <option value="1">Lundi</option>
+        <option value="2">Mardi</option>
+        <option value="3">Mercredi</option>
+        <option value="4">Jeudi</option>
+        <option value="5">Vendredi</option>
+        <option value="6">Samedi</option>
+        <option value="0">Dimanche</option>
+      </select>
+      <div id="m-training-day-hint" style="margin-top:4px;font-size:11px;color:var(--muted);display:none">⚠ Ce sondage n'a pas de jour d'entraînement assigné. Choisis-en un pour qu'il apparaisse dans le filtre et les snapshots.</div>
+    </div>
+
+    <!-- Issue #67 : la Question redevient saisie librement par l'admin.
+         Les Options restent tirées de la bibliothèque (cf m-library-info). -->
+    <div class="form-group">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <label style="margin:0">Question</label>
+        <button type="button" id="m-add-day-chip" class="btn btn-sm btn-secondary" style="padding:4px 10px;font-size:11px" onclick="addDayChip()">+ Jour</button>
+      </div>
+      <div id="m-question" class="m-question-ce" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Question du sondage, peut contenir un chip de jour d'entraînement" data-placeholder="Ex : Es-tu là {jour} ?" oninput="onQuestionInput()"></div>
+      <div id="m-title-preview" style="margin-top:6px;font-size:12px;color:var(--accent-text);background:var(--accent-soft);padding:6px 10px;border-radius:8px"></div>
+      <p style="font-size:11px;color:var(--muted);margin-top:6px">
+        💡 Insère <code style="background:var(--input);padding:1px 4px;border-radius:3px">{jour}</code> via le bouton "+ Jour" pour qu'il soit remplacé par le jour d'entraînement à chaque envoi.
+      </p>
+    </div>
+
+    <!-- Options : tirées de la bibliothèque, pas saisies. DOM conservé
+         en display:none pour ne pas casser addOpt() / getQuestionText(). -->
+    <div id="m-opts" style="display:none"></div>
+
+    <div id="m-library-info" class="form-group">
+      <div style="padding:14px;background:var(--accent-soft);color:var(--accent-text);border-radius:10px;font-size:13px;line-height:1.5">
+        <strong>📚 Options tirées de la bibliothèque</strong><br>
+        Les options de réponse (Oui / Non / Je quitte / Blessé) sont <strong>tirées aléatoirement à chaque envoi</strong> parmi les phrases enregistrées.
+        <a href="#" onclick="closeModal();go('p-library');return false" style="color:var(--accent-text);text-decoration:underline;display:inline-block;margin-top:6px">Gérer la bibliothèque →</a>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Frequence</label>
+      <select id="m-freq" onchange="onFreqChange()">
+        <option value="daily">Tous les jours</option>
+        <option value="weekdays">Lundi au vendredi</option>
+        <option value="weekend">Week-end (Sam + Dim)</option>
+        <option value="weekly">Une fois par semaine</option>
+        <option value="biweekly">Toutes les 2 semaines</option>
+        <option value="monthly">Une fois par mois</option>
+        <option value="custom_days">Jours personnalises...</option>
+      </select>
+    </div>
+
+    <div id="m-day-wrap" class="form-group" style="display:none">
+      <label>Jour</label>
+      <select id="m-day">
+        <option value="1">Lundi</option>
+        <option value="2">Mardi</option>
+        <option value="3">Mercredi</option>
+        <option value="4">Jeudi</option>
+        <option value="5">Vendredi</option>
+        <option value="6">Samedi</option>
+        <option value="0">Dimanche</option>
+      </select>
+    </div>
+
+    <div id="m-custom-days-wrap" class="form-group" style="display:none">
+      <label>Jours</label>
+      <div id="m-custom-days" style="display:flex;gap:6px;flex-wrap:wrap">
+        <div class="day-toggle" data-day="1">Lun</div>
+        <div class="day-toggle" data-day="2">Mar</div>
+        <div class="day-toggle" data-day="3">Mer</div>
+        <div class="day-toggle" data-day="4">Jeu</div>
+        <div class="day-toggle" data-day="5">Ven</div>
+        <div class="day-toggle" data-day="6">Sam</div>
+        <div class="day-toggle" data-day="0">Dim</div>
+      </div>
+    </div>
+
+    <div id="m-mday-wrap" class="form-group" style="display:none">
+      <label>Jour du mois</label>
+      <select id="m-mday"></select>
+    </div>
+
+    <div class="form-group">
+      <label>Heure</label>
+      <div class="sched-row">
+        <select id="m-hour"></select>
+        <select id="m-min">
+          <option value="0">00</option>
+          <option value="15">15</option>
+          <option value="30">30</option>
+          <option value="45">45</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <label style="margin:0">Groupes</label>
+        <button type="button" class="btn btn-sm btn-secondary" onclick="reloadGroups()" style="padding:4px 10px;font-size:11px">↻ Actualiser</button>
+      </div>
+      <input type="search" id="m-groups-search" placeholder="🔍 Rechercher un groupe..." oninput="filterGroups()" style="margin-bottom:8px">
+      <div id="m-groups" class="check-list"></div>
+      <p id="m-groups-count" style="color:var(--muted);font-size:11px;margin-top:6px"></p>
+    </div>
+
+    <div class="form-group">
+      <div class="switch-row" id="m-multi-row" onclick="toggleMulti()">
+        <div class="switch-text">
+          <strong>Reponses multiples</strong>
+          <small>Permet aux utilisateurs de choisir plusieurs options</small>
+        </div>
+        <div class="switch" id="m-multi-switch"></div>
+      </div>
+    </div>
+
+    <!-- Toggle library retiré : library est désormais le mode unique. Le
+         switch reste dans le DOM (caché) pour ne pas casser savePoll qui
+         lit son état. m-lib-status reste présent pour l'init "lib non prête". -->
+    <div id="m-lib-row" style="display:none">
+      <div class="switch on" id="m-lib-switch"></div>
+    </div>
+    <div id="m-lib-status" style="margin-bottom:12px;font-size:12px"></div>
+
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="savePoll()">Enregistrer</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const A = '';
+let token = localStorage.getItem('pb_token');
+let isAdmin = false;
+let isViewer = false;
+let chosenRole = null; // 'admin' or 'viewer'
+
+// --- Helpers ---
+function h(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function toast(m, ok=true) { const t = document.createElement('div'); t.className = 'toast ' + (ok ? 'toast-ok' : 'toast-err'); t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 2500); }
+function hdr() { return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }; }
+
+// --- Clipboard helpers (graceful fallback for insecure contexts / older browsers) ---
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    toast('Code copie');
+    return true;
+  } catch { toast('Impossible de copier', false); return false; }
+}
+async function pasteFromClipboard(inputId) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      const text = await navigator.clipboard.readText();
+      el.value = (text || '').replace(/[^0-9]/g, '').slice(0, el.maxLength || 6);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.focus();
+      toast('Code colle');
+    } else {
+      el.focus();
+      toast('Utilisez Ctrl+V / Cmd+V', false);
+    }
+  } catch { toast('Autorisez le presse-papiers', false); }
+}
+// Helper: show a full-box loader in a container
+function showLoader(el, text) {
+  if (!el) return;
+  el.innerHTML = `<div class="loader-box"><span class="spinner spinner-lg"></span><div>${text || 'Chargement...'}</div></div>`;
+}
+
+// Group pill HTML (shows the WhatsApp group name in result cards)
+function groupPill(name, id) {
+  const label = name || (id ? '+' + id.split('@')[0] : '?');
+  return `<span class="group-pill"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>${h(label)}</span>`;
+}
+
+// Helper: disable a button and show a spinner during an async action
+function setBtnLoading(btn, loading, loadingText) {
+  if (!btn) return null;
+  if (loading) {
+    btn.dataset.origText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>' + (loadingText || 'Chargement...');
+  } else {
+    btn.disabled = false;
+    if (btn.dataset.origText !== undefined) btn.innerHTML = btn.dataset.origText;
+  }
+}
+// Wrap an onclick event to set loading on the clicked button during async work
+async function withLoading(ev, loadingText, fn) {
+  const btn = ev && ev.currentTarget;
+  setBtnLoading(btn, true, loadingText);
+  try { await fn(); } finally { setBtnLoading(btn, false); }
+}
+async function api(url, opts={}) {
+  opts.headers = { ...hdr(), ...(opts.headers||{}) };
+  const r = await fetch(A + url, opts);
+  if (r.status === 401) { localStorage.removeItem('pb_token'); token = null; showLogin(); throw new Error('401'); }
+  return r;
+}
+
+// --- Login/App toggle ---
+function showLogin() {
+  document.getElementById('login').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  // Always start at role selection
+  chosenRole = null;
+  showStep('s-role');
+}
+
+function pickRole(role) {
+  chosenRole = role;
+  // Update labels
+  const label = role === 'admin' ? 'Mode: Admin' : 'Mode: Observateur';
+  document.getElementById('qr-role-label').textContent = label;
+  document.getElementById('phone-role-label').textContent = label;
+  // Now check WhatsApp status to show QR or phone
+  showStep('s-wait');
+  checkWa();
+}
+function showApp() {
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  applyRolePermissions();
+  // Default filter on the merged Results page: today's training day
+  currentTrainingDayFilter = new Date().getDay();
+  currentGroupFilter = null;
+  loadResSelect();
+  checkStatus();
+  initSelects();
+  autoRefreshNames();
+  loadAppVersion();
+  // Load the default page (Home) content immediately after login
+  loadPolls();
+}
+
+function applyRolePermissions() {
+  const newPollBtn = document.getElementById('btn-new-poll');
+  if (newPollBtn) newPollBtn.style.display = isViewer ? 'none' : '';
+  // Hide settings tab for viewers (they have nothing to manage)
+  const settingsTab = document.querySelector('.nav-item:last-child');
+  if (settingsTab) settingsTab.style.display = isViewer ? 'none' : '';
+}
+function showStep(id) {
+  ['s-role','s-wait','s-noaccess','s-qr-secret','s-qr','s-phone','s-code'].forEach(s => document.getElementById(s).style.display = 'none');
+  document.getElementById(id).style.display = 'block';
+  // Stop the QR fast poll when leaving the QR screen
+  if (id !== 's-qr' && typeof stopQrFastPoll === 'function') stopQrFastPoll();
+  // Auto-reload timer: start when entering s-wait, clear when leaving
+  if (id === 's-wait') startWaitReloadTimer(); else clearWaitReloadTimer();
+}
+
+// --- Auto-reload if stuck on s-wait too long (e.g. after restore) ---
+let waitReloadTimer = null;
+let waitCountdown = null;
+
+function startWaitReloadTimer() {
+  clearWaitReloadTimer();
+  const RELOAD_DELAY = 45; // seconds
+  let remaining = RELOAD_DELAY;
+  const msgEl = document.getElementById('s-wait-reload-msg');
+  const countEl = document.getElementById('s-wait-countdown');
+  // Show countdown message after 15s
+  waitReloadTimer = setTimeout(() => {
+    msgEl.style.display = '';
+    countEl.textContent = String(RELOAD_DELAY - 15);
+    remaining = RELOAD_DELAY - 15;
+    waitCountdown = setInterval(() => {
+      remaining--;
+      countEl.textContent = String(remaining);
+      if (remaining <= 0) location.reload();
+    }, 1000);
+  }, 15000);
+}
+
+function clearWaitReloadTimer() {
+  if (waitReloadTimer) { clearTimeout(waitReloadTimer); waitReloadTimer = null; }
+  if (waitCountdown) { clearInterval(waitCountdown); waitCountdown = null; }
+  const msgEl = document.getElementById('s-wait-reload-msg');
+  if (msgEl) msgEl.style.display = 'none';
+}
+
+// --- WA status for login ---
+async function checkWa() {
+  if (token) return;
+  if (!chosenRole) return; // Wait for role choice first
+
+  // Don't disturb the user if they're typing in phone or code
+  const codeVisible = document.getElementById('s-code').style.display !== 'none';
+  const phoneInput = document.getElementById('f-phone');
+  const phoneTyped = phoneInput && phoneInput.value.length > 0;
+  if (codeVisible || phoneTyped) return;
+
+  try {
+    const r = await fetch(A + '/api/wa/status');
+    const d = await r.json();
+
+    if (d.ready) {
+      // WhatsApp is connected — ALWAYS jump to phone step
+      // Even if user was on s-qr or s-qr-secret, this means linking just succeeded
+      showStep('s-phone');
+      document.getElementById('phone-role-label').textContent =
+        chosenRole === 'admin' ? 'Mode: Admin' : 'Mode: Observateur';
+      return;
+    }
+
+    // Not ready: don't override active linking steps
+    const linkingSteps = ['s-qr-secret','s-qr'];
+    if (linkingSteps.some(s => document.getElementById(s).style.display !== 'none')) return;
+
+    if (chosenRole === 'admin' && d.has_qr) {
+      document.getElementById('qr-role-label-2').textContent = 'Mode: Admin';
+      showStep('s-qr-secret');
+    } else if (chosenRole === 'viewer') {
+      showStep('s-noaccess');
+    } else {
+      showStep('s-wait');
+    }
+  } catch {
+    showStep('s-wait');
+  }
+}
+
+let qrFastPoll = null;
+
+function startQrFastPoll() {
+  stopQrFastPoll();
+  qrFastPoll = setInterval(async () => {
+    if (document.hidden) return;
+    try {
+      const r = await fetch(A + '/api/wa/status');
+      const d = await r.json();
+      if (d.ready) {
+        stopQrFastPoll();
+        showStep('s-phone');
+        document.getElementById('phone-role-label').textContent =
+          chosenRole === 'admin' ? 'Mode: Admin' : 'Mode: Observateur';
+        toast('WhatsApp connecte !');
+      }
+    } catch {}
+  }, 2500);
+}
+
+function stopQrFastPoll() {
+  if (qrFastPoll) { clearInterval(qrFastPoll); qrFastPoll = null; }
+}
+
+async function validatePairSecret() {
+  const secret = document.getElementById('f-pair-secret').value;
+  if (!secret) return toast('Secret requis', false);
+  const btn = document.querySelector('#s-qr-secret button.btn-primary');
+  setBtnLoading(btn, true, 'Verification...');
+  try {
+    const r = await fetch(A + '/api/wa/qr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret })
+    });
+    if (r.status === 403) { const d = await r.json(); return toast(d.error || 'Secret invalide', false); }
+    if (r.status === 500) { const d = await r.json(); return toast(d.error || 'Erreur', false); }
+    if (!r.ok) { const d = await r.json().catch(() => ({})); return toast(d.error || 'QR indisponible', false); }
+    const d = await r.json();
+    document.getElementById('qr-img').src = d.qr_data_url;
+    showStep('s-qr');
+    startQrFastPoll();
+  } catch { toast('Erreur reseau', false); }
+  finally { setBtnLoading(btn, false); }
+}
+
+// --- Auth ---
+let loginPhone = '';
+async function sendCode() {
+  const phone = document.getElementById('f-phone').value.trim();
+  if (!phone || phone.length < 8) return toast('Numero invalide', false);
+  const btn = document.querySelector('#s-phone button.btn-primary');
+  setBtnLoading(btn, true, 'Envoi...');
+  try {
+    const r = await fetch(A + '/api/auth/request-code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) });
+    const d = await r.json();
+    if (!r.ok) return toast(d.error, false);
+    loginPhone = phone; showStep('s-code'); document.getElementById('f-code').focus(); toast('Code envoye');
+  } catch { toast('Erreur serveur', false); }
+  finally { setBtnLoading(btn, false); }
+}
+
+async function checkCode() {
+  const code = document.getElementById('f-code').value.trim();
+  if (code.length !== 6) return toast('6 chiffres requis', false);
+  const asViewer = chosenRole === 'viewer';
+  const btn = document.querySelector('#s-code button.btn-primary');
+  setBtnLoading(btn, true, 'Verification...');
+  try {
+    const r = await fetch(A + '/api/auth/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: loginPhone, code, as_viewer: asViewer })
+    });
+    const d = await r.json();
+    if (!r.ok) return toast(d.error, false);
+    token = d.token; localStorage.setItem('pb_token', token);
+    isAdmin = d.role === 'admin';
+    isViewer = d.role === 'viewer';
+    toast(d.role === 'admin' ? 'Connecte (Admin)' : d.role === 'viewer' ? 'Connecte (Observateur)' : 'Connecte');
+    showApp();
+  } catch { toast('Erreur', false); }
+  finally { setBtnLoading(btn, false); }
+}
+
+document.getElementById('f-phone').addEventListener('keydown', e => { if (e.key === 'Enter') sendCode(); });
+document.getElementById('f-code').addEventListener('keydown', e => { if (e.key === 'Enter') checkCode(); });
+
+async function doLogout() {
+  try { await fetch(A + '/api/auth/logout', { method: 'POST', headers: hdr() }); } catch {}
+  localStorage.removeItem('pb_token'); token = null; showLogin();
+}
+
+// --- Navigation ---
+function go(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(page).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach((n,i) => n.classList.toggle('active', n === event.currentTarget));
+  if (page === 'p-home') loadPolls();
+  if (page === 'p-results') loadResSelect();
+  if (page === 'p-library') loadLibrary();
+  if (page === 'p-settings') {
+    // Parallelize all settings loads for faster page render
+    Promise.all([loadOnline(), loadWl(), loadVw(), loadWaLinkInfo()]);
+  }
+}
+
+// --- Status ---
+async function checkStatus() {
+  try {
+    // Lightweight session check (api() handles 401 → showLogin)
+    const check = await api('/api/auth/check');
+    if (!check.ok) return;
+    const r = await fetch(A + '/api/wa/status'); const d = await r.json();
+    document.getElementById('dot').className = 'status-dot ' + (d.ready ? 'dot-on' : 'dot-off');
+    document.getElementById('status-text').textContent = d.ready ? 'Connecte' : 'Deconnecte';
+  } catch {}
+}
+
+// --- Polls ---
+async function loadPolls() {
+  const el = document.getElementById('poll-list');
+  showLoader(el, 'Chargement des sondages...');
+  try {
+    const r = await api('/api/polls'); const polls = await r.json();
+    if (!polls.length) { el.innerHTML = '<div class="empty">Aucun sondage</div>'; return; }
+    el.innerHTML = polls.map(p => {
+      const lastSent = p.last_sent_at
+        ? `Dernier: ${formatRelative(p.last_sent_at)} (${p.last_send_total||0} votes)`
+        : 'Jamais envoyé';
+      const actions = isViewer ? '' : `
+        <div class="poll-actions">
+          <button class="btn btn-sm btn-primary" onclick="sendNow(${p.id})">Envoyer</button>
+          <button class="btn btn-sm btn-secondary" onclick="openEdit(${p.id})">Modifier</button>
+          <button class="btn btn-sm btn-secondary" onclick="togglePoll(${p.id},${!p.is_active})">${p.is_active ? 'Pause' : 'Activer'}</button>
+          <button class="btn btn-sm btn-danger" onclick="delPoll(${p.id})">Suppr</button>
+        </div>
+      `;
+      const title = p.display_title || p.question || 'Entrainement';
+      const hasDay = p.training_day !== null && p.training_day !== undefined;
+      const trainingPill = hasDay
+        ? `<span class="badge" style="background:var(--accent-soft);color:var(--accent-text)">${DAYS[p.training_day]}</span>`
+        : `<span class="badge" style="background:#fef3c7;color:#92400e" title="Ce sondage n'a pas de jour d'entraînement assigné — il n'apparaît pas dans le filtre par jour ni dans les snapshots. Édite-le pour en choisir un.">⚠ Jour non assigné</span>`;
+      return `
+      <div class="card poll-card ${p.is_active ? '' : 'inactive'}">
+        <h4>${h(title)}</h4>
+        <div class="poll-meta">
+          <span class="badge ${p.is_active ? 'badge-on' : 'badge-off'}">${p.is_active ? 'Actif' : 'Pause'}</span>
+          ${trainingPill}
+          ${h(cronHuman(p.cron_expression))} &bull; ${p.group_ids.length} groupe(s)
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${lastSent}</div>
+        ${actions}
+      </div>
+      `;
+    }).join('');
+  } catch (e) {
+    if (e && e.message === '401') return;
+    el.innerHTML = '<div class="empty" style="color:var(--red)">Erreur de chargement</div>';
+  }
+}
+
+async function sendNow(id) {
+  if (!confirm('Envoyer maintenant ?')) return;
+  const btn = event && event.currentTarget;
+  setBtnLoading(btn, true, 'Envoi...');
+  try {
+    const r = await api('/api/polls/'+id+'/send', { method: 'POST' });
+    if (r.ok) {
+      toast('Envoyé !');
+    } else {
+      // Issue #66 : 422 = library incomplète. Affiche le détail au lieu
+      // d'un "Erreur" générique qui ne dit pas quoi corriger.
+      let msg = 'Erreur';
+      try {
+        const d = await r.json();
+        if (r.status === 422 && d.error) {
+          msg = d.error;
+          if (confirm(msg + '\n\nOuvrir la bibliothèque pour corriger ?')) {
+            go('p-library');
+          }
+          return;
+        } else if (d.error) {
+          msg = d.error;
+        }
+      } catch {}
+      toast(msg, false);
+    }
+  } catch (e) {
+    if (e && e.message !== '401') toast('Erreur réseau', false);
+  } finally { setBtnLoading(btn, false); }
+}
+async function togglePoll(id, active) {
+  const btn = event && event.currentTarget;
+  setBtnLoading(btn, true, '...');
+  try {
+    await api('/api/polls/'+id, { method: 'PUT', body: JSON.stringify({ is_active: active }) });
+    loadPolls();
+  } catch {}
+  finally { setBtnLoading(btn, false); }
+}
+async function delPoll(id) {
+  if (!confirm('Supprimer ?')) return;
+  const btn = event && event.currentTarget;
+  setBtnLoading(btn, true, '...');
+  try {
+    await api('/api/polls/'+id, { method: 'DELETE' });
+    toast('Supprime');
+    loadPolls();
+  } catch {}
+  finally { setBtnLoading(btn, false); }
+}
+
+// --- Cron helper (client side) ---
+const DAYS = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+function cronHuman(c) {
+  if (c === '*/5 * * * *') return '[TEST] Toutes les 5 min';
+  const p = c.split(' ');
+  if (p.length !== 5) return c;
+  const t = p[1].padStart(2,'0') + ':' + p[0].padStart(2,'0');
+  const dom = p[2];
+  const dow = p[4];
+  const SHORT = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+
+  if (dow === '1-5') return 'Lun-Ven ' + t;
+  if (dow === '0,6' || dow === '6,0') return 'Week-end ' + t;
+  if (dom === '1-7,15-21' && dow !== '*') return `Toutes les 2 sem (${DAYS[+dow]}) ` + t;
+  if (dow !== '*' && dow.includes(',')) {
+    // Custom days: comma-separated
+    const days = dow.split(',').sort().map(d => SHORT[+d]).join('/');
+    return days + ' ' + t;
+  }
+  if (dow !== '*' && dom === '*') return DAYS[+dow] + ' ' + t;
+  if (dom !== '*') return 'Le ' + dom + ' a ' + t;
+  return 'Chaque jour ' + t;
+}
+
+// --- Modal ---
+function initSelects() {
+  const hSel = document.getElementById('m-hour');
+  if (hSel.children.length === 0) {
+    for (let i = 0; i < 24; i++) hSel.innerHTML += `<option value="${i}">${String(i).padStart(2,'0')}</option>`;
+  }
+  const mdSel = document.getElementById('m-mday');
+  if (mdSel.children.length === 0) {
+    for (let i = 1; i <= 28; i++) mdSel.innerHTML += `<option value="${i}">${i}</option>`;
+  }
+}
+
+function onFreqChange() {
+  const f = document.getElementById('m-freq').value;
+  document.getElementById('m-day-wrap').style.display = (f === 'weekly' || f === 'biweekly') ? 'block' : 'none';
+  document.getElementById('m-mday-wrap').style.display = f === 'monthly' ? 'block' : 'none';
+  document.getElementById('m-custom-days-wrap').style.display = f === 'custom_days' ? 'block' : 'none';
+  // Hide hour/minute for test mode
+  const hourRow = document.getElementById('m-hour').closest('.form-group');
+  if (hourRow) hourRow.style.display = f === 'test' ? 'none' : 'block';
+}
+
+function setupDayToggles() {
+  document.querySelectorAll('#m-custom-days .day-toggle').forEach(el => {
+    el.onclick = () => el.classList.toggle('selected');
+  });
+}
+
+function getSelectedCustomDays() {
+  return Array.from(document.querySelectorAll('#m-custom-days .day-toggle.selected'))
+    .map(el => el.dataset.day)
+    .sort();
+}
+
+function setSelectedCustomDays(days) {
+  document.querySelectorAll('#m-custom-days .day-toggle').forEach(el => {
+    el.classList.toggle('selected', days.includes(el.dataset.day));
+  });
+}
+
+function addOpt(val='') {
+  const c = document.getElementById('m-opts');
+  const n = c.children.length + 1;
+  const d = document.createElement('div'); d.className = 'opt-row';
+  d.innerHTML = `<input type="text" class="m-opt" value="${h(val)}" placeholder="Option ${n}"><button type="button" class="opt-del" onclick="this.parentElement.remove()">x</button>`;
+  c.appendChild(d);
+}
+
+// Build a day chip span (pill) for insertion into the contenteditable question field.
+// The chip is marked contenteditable=false so it behaves as an atomic unit.
+// data-day stores the DOW so getQuestionText() can serialize it back to text.
+function buildDayChip(d) {
+  const dayName = DAYS[d] || '';
+  const chip = document.createElement('span');
+  chip.className = 'day-chip-inline';
+  chip.contentEditable = 'false';
+  chip.dataset.dayChip = '1';
+  chip.dataset.day = String(d);
+  // Issue #59 : a11y — chip atomique, focusable clavier, role explicite
+  chip.setAttribute('tabindex', '0');
+  chip.setAttribute('role', 'group');
+  chip.setAttribute('aria-label', `Jour : ${dayName}. Supprimez avec Backspace ou bouton Retirer.`);
+  // Suppression au clavier (Backspace/Delete) pour ne pas forcer la souris
+  chip.addEventListener('keydown', (e) => {
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      e.preventDefault();
+      chip.remove();
+      onQuestionInput();
+    }
+  });
+  const label = document.createElement('span');
+  label.textContent = dayName;
+  chip.appendChild(label);
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.setAttribute('aria-label', `Retirer le jour ${dayName}`);
+  btn.textContent = '×';
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    chip.remove();
+    onQuestionInput();
+  });
+  chip.appendChild(btn);
+  return chip;
+}
+
+function hasDayChip() {
+  const qEl = document.getElementById('m-question');
+  return !!(qEl && qEl.querySelector('[data-day-chip]'));
+}
+
+function refreshAddDayBtn() {
+  const btn = document.getElementById('m-add-day-chip');
+  const dayEl = document.getElementById('m-training-day');
+  if (!btn || !dayEl) return;
+  const d = parseInt(dayEl.value, 10);
+  const dayName = (Number.isInteger(d) && d >= 0 && d <= 6) ? DAYS[d] : '';
+  btn.textContent = '+ ' + dayName;
+  btn.style.display = hasDayChip() ? 'none' : 'inline-flex';
+}
+
+function addDayChip() {
+  const qEl = document.getElementById('m-question');
+  const dayEl = document.getElementById('m-training-day');
+  if (!qEl || !dayEl) return;
+  if (hasDayChip()) { refreshAddDayBtn(); return; }
+  const d = parseInt(dayEl.value, 10);
+  const chip = buildDayChip(d);
+  // Ajoute un espace avant la chip si la fin du texte n'en a pas
+  const last = qEl.lastChild;
+  const endsWithSpace = last && last.nodeType === Node.TEXT_NODE && /\s$/.test(last.nodeValue || '');
+  if (qEl.childNodes.length > 0 && !endsWithSpace) {
+    qEl.appendChild(document.createTextNode('\u00a0'));
+  }
+  qEl.appendChild(chip);
+  qEl.appendChild(document.createTextNode('\u00a0'));
+  onQuestionInput();
+}
+
+function onTrainingDayChange() {
+  // If a chip is present, update it in-place
+  const qEl = document.getElementById('m-question');
+  if (qEl) {
+    const existing = qEl.querySelector('[data-day-chip]');
+    if (existing) {
+      const d = parseInt(document.getElementById('m-training-day').value, 10);
+      const newChip = buildDayChip(d);
+      existing.replaceWith(newChip);
+    }
+  }
+  updateTitlePreview();
+}
+
+// Serialize the contenteditable content into a flat string.
+// Chips are rendered as their day name (not the "×" button text).
+function getQuestionText() {
+  const qEl = document.getElementById('m-question');
+  if (!qEl) return '';
+  let out = '';
+  for (const node of qEl.childNodes) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      out += node.nodeValue || '';
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      if (node.dataset && node.dataset.dayChip) {
+        const d = parseInt(node.dataset.day, 10);
+        if (Number.isInteger(d) && d >= 0 && d <= 6) out += DAYS[d];
+      } else {
+        out += node.textContent || '';
+      }
+    }
+  }
+  return out.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function updateTitlePreview() {
+  const previewEl = document.getElementById('m-title-preview');
+  const dayEl = document.getElementById('m-training-day');
+  if (!previewEl || !dayEl) return;
+  const d = parseInt(dayEl.value, 10);
+  const dayName = (Number.isInteger(d) && d >= 0 && d <= 6) ? DAYS[d] : '';
+  const q = getQuestionText();
+  previewEl.textContent = 'Aperçu : ' + (q || ('Entrainement ' + dayName));
+  refreshAddDayBtn();
+}
+
+function onQuestionInput() {
+  updateTitlePreview();
+}
+
+// Handler paste : force le texte brut dans le contenteditable pour eviter
+// qu'un admin qui colle accidentellement du HTML (ex: copie depuis une page
+// web avec script) injecte du DOM executable dans sa propre session.
+// Le self-XSS permet d'exfiltrer pb_token via localStorage.
+document.addEventListener('DOMContentLoaded', () => {
+  const qEl = document.getElementById('m-question');
+  if (!qEl) return;
+  qEl.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+    // insertText ne supporte pas l'undo stack via execCommand deprecated sur
+    // certains navs — fallback sur insertion manuelle au range courant.
+    if (document.queryCommandSupported && document.queryCommandSupported('insertText')) {
+      document.execCommand('insertText', false, text);
+    } else {
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount) return;
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(document.createTextNode(text));
+      range.collapse(false);
+    }
+    onQuestionInput();
+  });
+  // Bloque aussi le drop de fichiers/HTML
+  qEl.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const text = e.dataTransfer ? e.dataTransfer.getData('text/plain') : '';
+    if (text) {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount) {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(document.createTextNode(text));
+      }
+      onQuestionInput();
+    }
+  });
+});
+
+function populateQuestionForCreate() {
+  const qEl = document.getElementById('m-question');
+  if (!qEl) return;
+  qEl.innerHTML = '';
+  addDayChip();
+}
+
+function populateQuestionForEdit(saved, trainingDay) {
+  const qEl = document.getElementById('m-question');
+  if (!qEl) return;
+  qEl.innerHTML = '';
+  const name = DAYS[trainingDay] || '';
+  if (!saved) { addDayChip(); return; }
+  // Si la question sauvegardee contient le nom du jour courant,
+  // on en fait une chip a la premiere occurrence.
+  const idx = name ? saved.indexOf(name) : -1;
+  if (idx >= 0) {
+    const before = saved.substring(0, idx);
+    const after = saved.substring(idx + name.length);
+    if (before) qEl.appendChild(document.createTextNode(before));
+    qEl.appendChild(buildDayChip(trainingDay));
+    if (after) qEl.appendChild(document.createTextNode(after));
+  } else {
+    qEl.textContent = saved;
+  }
+  updateTitlePreview();
+}
+
+function openCreate() {
+  document.getElementById('modal-title').textContent = 'Nouveau sondage';
+  document.getElementById('m-id').value = '';
+  document.getElementById('m-training-day').value = '1';
+  const hint = document.getElementById('m-training-day-hint');
+  if (hint) hint.style.display = 'none';
+  populateQuestionForCreate();
+  document.getElementById('m-opts').innerHTML = '';
+  addOpt(); addOpt();
+  applyAdminFreqOptions();
+  document.getElementById('m-freq').value = 'weekly';
+  document.getElementById('m-day').value = '1';
+  document.getElementById('m-hour').value = '9';
+  document.getElementById('m-min').value = '0';
+  document.getElementById('m-multi-switch').classList.remove('on');
+  // Reset library toggle (état OFF par défaut pour nouveau poll)
+  document.getElementById('m-lib-switch').classList.remove('on');
+  applyLibraryUI(false);
+  setSelectedCustomDays([]);
+  setupDayToggles();
+  onFreqChange();
+  updateTitlePreview();
+  loadGroupSelect([]);
+  document.getElementById('modal-poll').classList.add('show');
+}
+
+function applyAdminFreqOptions() {
+  const sel = document.getElementById('m-freq');
+  // Remove existing test option if any
+  Array.from(sel.options).forEach(o => { if (o.value === 'test') o.remove(); });
+  // Add back if admin
+  if (isAdmin) {
+    const opt = document.createElement('option');
+    opt.value = 'test';
+    opt.textContent = '[Admin] Test toutes les 5 min';
+    sel.appendChild(opt);
+  }
+}
+
+async function openEdit(id) {
+  try {
+    const r = await api('/api/polls/' + id); const p = await r.json();
+    document.getElementById('modal-title').textContent = 'Modifier';
+    document.getElementById('m-id').value = p.id;
+    // Preserve la valeur null en DB plutot que de forcer 1 (Lundi) silencieusement —
+    // evite la mutation d'un legacy poll en Lundi lors d'un edit "passif".
+    const legacy = p.training_day === null || p.training_day === undefined;
+    document.getElementById('m-training-day').value = legacy ? '' : String(p.training_day);
+    const hint = document.getElementById('m-training-day-hint');
+    if (hint) hint.style.display = legacy ? 'block' : 'none';
+    // Pour la preview du titre uniquement, on utilise 1 comme fallback si legacy
+    const dForEdit = legacy ? 1 : Number(p.training_day);
+    populateQuestionForEdit(p.question || '', dForEdit);
+    document.getElementById('m-opts').innerHTML = '';
+    p.options.forEach(o => addOpt(o));
+    document.getElementById('m-multi-switch').classList.toggle('on', !!p.allow_multiple_answers);
+    // Sync toggle library + UI selon le poll chargé
+    document.getElementById('m-lib-switch').classList.toggle('on', !!p.use_phrase_library);
+    applyLibraryUI(!!p.use_phrase_library);
+    applyAdminFreqOptions();
+    setSelectedCustomDays([]);
+    setupDayToggles();
+    // Parse cron
+    const parts = p.cron_expression.split(' ');
+    if (parts[0] === '*/5') {
+      document.getElementById('m-freq').value = 'test';
+    } else {
+      document.getElementById('m-min').value = parts[0];
+      document.getElementById('m-hour').value = parts[1];
+      const dom = parts[2];
+      const dow = parts[4];
+      if (dow === '1-5') {
+        document.getElementById('m-freq').value = 'weekdays';
+      } else if (dow === '0,6' || dow === '6,0') {
+        document.getElementById('m-freq').value = 'weekend';
+      } else if (dow !== '*' && dow.includes(',')) {
+        // Custom days (comma-separated)
+        document.getElementById('m-freq').value = 'custom_days';
+        setSelectedCustomDays(dow.split(','));
+      } else if (dom === '1-7,15-21' && dow !== '*') {
+        document.getElementById('m-freq').value = 'biweekly';
+        document.getElementById('m-day').value = dow;
+      } else if (dow !== '*' && dom === '*') {
+        document.getElementById('m-freq').value = 'weekly';
+        document.getElementById('m-day').value = dow;
+      } else if (dom !== '*') {
+        document.getElementById('m-freq').value = 'monthly';
+        document.getElementById('m-mday').value = dom;
+      } else {
+        document.getElementById('m-freq').value = 'daily';
+      }
+    }
+    onFreqChange();
+    await loadGroupSelect(p.group_ids);
+    document.getElementById('modal-poll').classList.add('show');
+  } catch { toast('Erreur', false); }
+}
+
+function closeModal() { document.getElementById('modal-poll').classList.remove('show'); }
+
+async function loadGroupSelect(selectedIds = []) {
+  // Clear the search field when (re)loading groups
+  const searchInput = document.getElementById('m-groups-search');
+  if (searchInput) searchInput.value = '';
+
+  const el = document.getElementById('m-groups');
+  const countEl = document.getElementById('m-groups-count');
+
+  // Loading indicator
+  el.innerHTML = '<div class="check-list-empty" style="padding:20px"><div style="color:var(--muted)">⏳ Chargement des groupes...</div></div>';
+  countEl.textContent = '';
+
+  try {
+    const r = await api('/api/groups');
+    console.log('[groups] status:', r.status);
+
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      console.error('[groups] error response:', err);
+      el.innerHTML = `<div class="check-list-empty" style="color:var(--red);padding:20px">${h(err.error || 'HTTP ' + r.status)}</div>`;
+      return;
+    }
+
+    const groups = await r.json();
+    console.log('[groups] received:', groups.length, 'groups');
+
+    if (!groups.length) {
+      el.innerHTML = `
+        <div class="check-list-empty" style="padding:20px">
+          <div style="margin-bottom:8px;color:var(--orange)">⚠ Aucun groupe detecte</div>
+          <div style="font-size:11px;color:var(--muted)">
+            Le compte WhatsApp lie au bot n'est dans aucun groupe.<br>
+            Ajoutez-le dans les groupes cibles puis cliquez sur Actualiser.
+          </div>
+        </div>`;
+      return;
+    }
+
+    el.innerHTML = groups.map(g => {
+      const checked = selectedIds.includes(g.id);
+      return `
+        <div class="check-item ${checked ? 'checked' : ''}" data-id="${h(g.id)}" data-name="${h((g.name || '').toLowerCase())}" onclick="toggleGroup(this)">
+          <div class="check-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <span class="check-label">${h(g.name || 'Groupe sans nom')}</span>
+          <span class="check-count">${g.participants_count}</span>
+        </div>
+      `;
+    }).join('');
+    updateGroupsCount();
+  } catch (err) {
+    console.error('[groups] exception:', err);
+    if (err && err.message === '401') return; // api() will have triggered showLogin
+    el.innerHTML = '<div class="check-list-empty" style="color:var(--red);padding:20px">Erreur reseau. Verifiez votre connexion.</div>';
+  }
+}
+
+function filterGroups() {
+  const query = document.getElementById('m-groups-search').value.trim().toLowerCase();
+  const items = document.querySelectorAll('#m-groups .check-item');
+  let visible = 0;
+  items.forEach(item => {
+    const name = item.dataset.name || '';
+    const match = !query || name.includes(query);
+    item.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  const total = items.length;
+  const countEl = document.getElementById('m-groups-count');
+  if (query) countEl.textContent = `${visible} / ${total} groupe(s) correspondant`;
+  else updateGroupsCount();
+}
+
+function updateGroupsCount() {
+  const items = document.querySelectorAll('#m-groups .check-item');
+  const checked = document.querySelectorAll('#m-groups .check-item.checked').length;
+  const countEl = document.getElementById('m-groups-count');
+  if (countEl) countEl.textContent = `${checked} selectionne(s) sur ${items.length}`;
+}
+
+function toggleGroup(el) {
+  el.classList.toggle('checked');
+  // Only update counter if not currently filtering (to keep "X/Y matching" label)
+  const search = document.getElementById('m-groups-search');
+  if (!search || !search.value.trim()) updateGroupsCount();
+}
+
+async function reloadGroups() {
+  // Preserve current selection across reload
+  const selected = Array.from(document.querySelectorAll('#m-groups .check-item.checked'))
+    .map(c => c.dataset.id);
+  const btn = document.querySelector('button[onclick="reloadGroups()"]');
+  const originalText = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ ...'; }
+  try {
+    await loadGroupSelect(selected);
+    const count = document.querySelectorAll('#m-groups .check-item').length;
+    toast(count > 0 ? `${count} groupe(s) charge(s)` : 'Aucun groupe trouve', count > 0);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = originalText; }
+  }
+}
+
+function toggleMulti() {
+  document.getElementById('m-multi-switch').classList.toggle('on');
+}
+
+// Library est désormais le mode unique : les fonctions toggleLibrary /
+// applyLibraryUI deviennent triviales (no-op) mais restent définies pour
+// ne pas casser openCreate / openEdit qui les appellent encore.
+function toggleLibrary() { /* no-op */ }
+function applyLibraryUI(_on) {
+  // Library toujours active. On rafraîchit juste l'indicateur status
+  // (manquant / prêt) à chaque ouverture du modal.
+  refreshLibStatusInModal();
+}
+
+async function refreshLibStatusInModal() {
+  const el = document.getElementById('m-lib-status');
+  el.style.display = 'block';
+  el.innerHTML = '<span style="color:var(--muted)">Vérification de la bibliothèque…</span>';
+  try {
+    const r = await api('/api/phrases/status');
+    const d = await r.json();
+    if (d.ready) {
+      const inj = (d.counts.injured || 0) > 0 ? `, blessé: ${d.counts.injured}` : '';
+      // Issue #67 : 'title' est legacy → ne plus le compter dans le résumé.
+      el.innerHTML = `<span style="color:var(--g)">✓ Bibliothèque prête</span> <span style="color:var(--muted)">(oui: ${d.counts.yes || 0}, non: ${d.counts.no || 0}, quitter: ${d.counts.quit || 0}${inj})</span>`;
+    } else {
+      el.innerHTML = `<span style="color:var(--red)">⚠ Manque : ${d.missing.join(', ')}</span> <a href="#" onclick="closeModal();go('p-library');return false" style="color:var(--accent-text)">Aller à la bibliothèque →</a>`;
+    }
+  } catch {
+    el.innerHTML = '<span style="color:var(--muted)">Impossible de vérifier la bibliothèque.</span>';
+  }
+}
+
+async function savePoll() {
+  const id = document.getElementById('m-id').value;
+  const rawTrainingDay = document.getElementById('m-training-day').value;
+  // Chaîne vide = "— Aucun —" : on envoie null au backend pour preserver
+  // l'etat NULL d'un legacy poll qu'on n'a pas voulu assigner a un jour.
+  const training_day = rawTrainingDay === '' ? null : parseInt(rawTrainingDay, 10);
+  // Issue #67 : la question est saisie par l'admin (revenue dans le modal).
+  // Les options restent tirées de la bibliothèque.
+  const question = getQuestionText();
+  const group_ids = Array.from(document.querySelectorAll('#m-groups .check-item.checked')).map(c => c.dataset.id);
+  const allow_multiple_answers = document.getElementById('m-multi-switch').classList.contains('on');
+  const use_phrase_library = true;
+
+  if (training_day !== null && (!Number.isInteger(training_day) || training_day < 0 || training_day > 6)) {
+    return toast("Jour d'entrainement invalide", false);
+  }
+  if (!question || !question.trim()) {
+    return toast('Question requise', false);
+  }
+  if (!group_ids.length) return toast('Choisir un groupe', false);
+
+  const freq = document.getElementById('m-freq').value;
+  const hr = document.getElementById('m-hour').value;
+  const min = document.getElementById('m-min').value;
+  let cron;
+  if (freq === 'test') cron = '*/5 * * * *';
+  else if (freq === 'daily') cron = `${min} ${hr} * * *`;
+  else if (freq === 'weekdays') cron = `${min} ${hr} * * 1-5`;
+  else if (freq === 'weekend') cron = `${min} ${hr} * * 0,6`;
+  else if (freq === 'weekly') cron = `${min} ${hr} * * ${document.getElementById('m-day').value}`;
+  else if (freq === 'biweekly') {
+    // Every other week on the chosen day (uses day-of-month range 1-7,15-21)
+    cron = `${min} ${hr} 1-7,15-21 * ${document.getElementById('m-day').value}`;
+  }
+  else if (freq === 'custom_days') {
+    const days = getSelectedCustomDays();
+    if (!days.length) return toast('Selectionnez au moins un jour', false);
+    cron = `${min} ${hr} * * ${days.join(',')}`;
+  }
+  else cron = `${min} ${hr} ${document.getElementById('m-mday').value} * *`;
+
+  // Issue #67 : la question vient du formulaire (saisie admin), les
+  // options sont des placeholders (ignorés au send car library tire).
+  const body = {
+    question,
+    options: ['[lib]', '[lib]'],
+    cron_expression: cron,
+    group_ids,
+    allow_multiple_answers,
+    training_day,
+    use_phrase_library,
+  };
+
+  const btn = document.querySelector('#modal-poll button.btn-primary');
+  setBtnLoading(btn, true, 'Enregistrement...');
+  try {
+    const r = await api('/api/polls' + (id ? '/' + id : ''), {
+      method: id ? 'PUT' : 'POST',
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) { const e = await r.json(); return toast(e.error, false); }
+    toast(id ? 'Modifie !' : 'Cree !'); closeModal(); loadPolls();
+  } catch (e) { if (e.message !== '401') toast('Erreur', false); }
+  finally { setBtnLoading(btn, false); }
+}
+
+// --- Results page state (filtre par jour d'entrainement) ---
+let currentTrainingDayFilter = null; // 0..6 (DOW) ou null = tous les polls
+let currentGroupFilter = null; // group_id or null
+let activeGroupsCache = []; // [{group_id, group_name, send_count}]
+
+// Merged Results page entry point: default day view or all-polls list
+function loadResSelect() {
+  if (currentTrainingDayFilter !== null && currentTrainingDayFilter !== undefined) {
+    showPollsByTrainingDay(currentTrainingDayFilter);
+  } else {
+    showResultsList();
+  }
+}
+
+// Fetch list of groups that have sends (cached for session)
+async function loadActiveGroups() {
+  try {
+    const r = await api('/api/polls/groups/active');
+    if (!r.ok) return [];
+    activeGroupsCache = await r.json();
+    return activeGroupsCache;
+  } catch { return []; }
+}
+
+function renderGroupFilter() {
+  if (!activeGroupsCache.length) return '';
+  const options = activeGroupsCache
+    .map(g => {
+      const label = g.group_name || '+' + (g.group_id ? g.group_id.split('@')[0] : '?');
+      const selected = currentGroupFilter === g.group_id ? 'selected' : '';
+      return `<option value="${h(g.group_id)}" ${selected}>${h(label)} (${g.send_count})</option>`;
+    })
+    .join('');
+  return `
+    <div style="margin:8px 0 12px">
+      <select id="res-group-filter" onchange="onGroupFilterChange()" style="font-size:13px">
+        <option value="" ${currentGroupFilter === null ? 'selected' : ''}>Tous les groupes</option>
+        ${options}
+      </select>
+    </div>
+  `;
+}
+
+function onGroupFilterChange() {
+  const val = document.getElementById('res-group-filter').value;
+  currentGroupFilter = val || null;
+  // Re-render the current view with the new filter
+  if (currentTrainingDayFilter !== null && currentTrainingDayFilter !== undefined) {
+    showPollsByTrainingDay(currentTrainingDayFilter);
+  } else {
+    showResultsList();
+  }
+}
+
+function getCurrentWeekDates() {
+  // Monday to Sunday (7 days, full week)
+  const today = new Date();
+  const dow = today.getDay(); // 0=Sun
+  const offsetToMon = dow === 0 ? -6 : 1 - dow;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + offsetToMon);
+  monday.setHours(0,0,0,0);
+  return Array.from({length: 7}, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return d;
+  });
+}
+
+function dateToISO(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function renderDayChips() {
+  // Chips = training days (Lun..Dim), independent of calendar week
+  const labels = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+  const dows   = [1,2,3,4,5,6,0];
+  const todayDow = new Date().getDay();
+  return `
+    <div class="day-chips">
+      ${dows.map((dow,i) => {
+        const isActive = currentTrainingDayFilter === dow;
+        const isToday = dow === todayDow;
+        return `<div class="day-chip ${isActive ? 'active' : ''} ${isToday ? 'today' : ''}" onclick="filterByTrainingDay(${dow})">
+          <span class="day-name">${labels[i]}</span>
+        </div>`;
+      }).join('')}
+      <div class="day-chip ${currentTrainingDayFilter === null ? 'active' : ''}" style="min-width:auto;padding:8px 14px" onclick="filterByTrainingDay(null)">
+        <span class="day-name">Tout</span>
+      </div>
+    </div>
+  `;
+}
+
+async function filterByTrainingDay(dow) {
+  currentTrainingDayFilter = (dow === null || dow === undefined) ? null : Number(dow);
+  if (currentTrainingDayFilter !== null) {
+    showPollsByTrainingDay(currentTrainingDayFilter);
+  } else {
+    showResultsList();
+  }
+}
+
+async function showResultsList() {
+  const view = document.getElementById('res-view');
+  showLoader(view, 'Chargement des sondages...');
+  try {
+    // Parallelize: polls list + active groups (for the filter)
+    const [pollsRes] = await Promise.all([
+      api('/api/polls'),
+      activeGroupsCache.length ? Promise.resolve(null) : loadActiveGroups(),
+    ]);
+    const polls = await pollsRes.json();
+    const header = `
+      <h3 style="margin-bottom:4px">Resultats</h3>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:12px">3 dernieres semaines &bull; tous les sondages</p>
+      ${renderDayChips()}
+      ${renderGroupFilter()}
+    `;
+    if (!polls.length) {
+      view.innerHTML = header + '<div class="empty">Aucun sondage</div>';
+      return;
+    }
+    view.innerHTML = `
+      ${header}
+      <p style="color:var(--muted);font-size:12px;margin:4px 0 12px">Tap sur un sondage pour voir son historique</p>
+      ${polls.map(p => {
+        const title = p.display_title || p.question || 'Entrainement';
+        const hasDay = p.training_day !== null && p.training_day !== undefined;
+        const dayPill = hasDay
+          ? `<span class="badge" style="background:var(--accent-soft);color:var(--accent-text);margin-left:8px">${DAYS[p.training_day]}</span>`
+          : `<span class="badge" style="background:#fef3c7;color:#92400e;margin-left:8px" title="Jour non assigné">⚠</span>`;
+        return `
+        <div class="card poll-card ${p.is_active ? '' : 'inactive'}" onclick="showPollHistory(${p.id})" style="cursor:pointer">
+          <h4>${h(title)}${dayPill}</h4>
+          <div class="poll-meta">${h(cronHuman(p.cron_expression))}</div>
+        </div>
+      `;}).join('')}
+    `;
+  } catch (e) {
+    if (e && e.message === '401') return;
+    view.innerHTML = '<div class="empty" style="color:var(--red)">Erreur de chargement</div>';
+  }
+}
+
+async function showPollsByTrainingDay(dow) {
+  const view = document.getElementById('res-view');
+  showLoader(view, 'Chargement des resultats...');
+  try {
+    let url = '/api/polls/by-training-day?day=' + dow;
+    if (currentGroupFilter) url += '&group_id=' + encodeURIComponent(currentGroupFilter);
+
+    const [r] = await Promise.all([
+      api(url),
+      activeGroupsCache.length ? Promise.resolve(null) : loadActiveGroups(),
+    ]);
+    const d = await r.json();
+    const dayName = DAYS[dow];
+    const todayDow = new Date().getDay();
+    const isToday = dow === todayDow;
+    const todaySuffix = isToday ? " (aujourd'hui)" : "";
+
+    const header = `
+      <h3 style="margin-bottom:4px">Resultats</h3>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Entrainement ${dayName}${todaySuffix} &bull; ${d.polls.length} sondage(s)</p>
+      ${renderDayChips()}
+      ${renderGroupFilter()}
+    `;
+
+    if (!d.polls.length) {
+      view.innerHTML = `
+        ${header}
+        <div class="today-empty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <div>Aucun sondage pour l'entrainement du ${dayName}${currentGroupFilter ? ' dans ce groupe' : ''}</div>
+        </div>
+      `;
+      return;
+    }
+
+    // For each matching poll, render its recent sends (up to 9 days back)
+    const parts = [header];
+    for (const poll of d.polls) {
+      const title = poll.display_title || poll.question || ('Entrainement ' + dayName);
+      const groups = d.send_groups_by_poll[poll.id] || [];
+      parts.push(`
+        <div class="today-card">
+          <div class="question">${h(title)}</div>
+          <div class="meta" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span>${h(cronHuman(poll.cron_expression))}</span>
+            <span class="badge" style="background:var(--accent-soft);color:var(--accent-text)">${dayName}</span>
+          </div>
+      `);
+      if (!groups.length) {
+        parts.push(`<div style="margin-top:10px;color:var(--muted);font-size:13px">Aucun envoi sur les 9 derniers jours</div>`);
+      } else {
+        for (const g of groups) {
+          for (const s of g.sends) {
+            const time = (s.sent_at || '').split(' ')[1]?.substring(0,5) || '';
+            // s.vote_count = compteur du send individuel (peuplé par
+            // getSendGroupsForPoll via JOIN). Fallback sur g.total_votes
+            // si l'API legacy ne renvoie pas vote_count par send.
+            const voteCount = (typeof s.vote_count === 'number') ? s.vote_count : g.total_votes;
+            parts.push(`
+              <div style="margin-top:12px;padding:10px;background:var(--input);border-radius:10px">
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);margin-bottom:6px">
+                  <span>${formatDate(g.date)}${time ? ' · ' + time : ''}</span>
+                  ${groupPill(s.group_name, s.group_id)}
+                </div>
+                <div style="font-size:13px">${voteCount} vote(s)</div>
+              </div>
+            `);
+          }
+        }
+      }
+      parts.push(`<div style="margin-top:10px"><button class="btn btn-sm btn-secondary" onclick="showPollHistory(${poll.id})">Voir le détail</button></div>`);
+      parts.push(`</div>`);
+    }
+    view.innerHTML = parts.join('');
+  } catch (e) {
+    if (e && e.message === '401') return;
+    view.innerHTML = '<div class="empty" style="color:var(--red)">Erreur de chargement</div>';
+  }
+}
+
+function formatRelative(sqlDate) {
+  // SQLite UTC datetime "YYYY-MM-DD HH:MM:SS"
+  if (!sqlDate) return '';
+  const d = new Date(sqlDate.replace(' ', 'T') + 'Z');
+  const diff = Date.now() - d.getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'a l\'instant';
+  if (min < 60) return `il y a ${min} min`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `il y a ${hr}h`;
+  const day = Math.floor(hr / 24);
+  if (day < 7) return `il y a ${day}j`;
+  return d.toLocaleDateString('fr-FR');
+}
+
+function formatDate(isoDate) {
+  // isoDate is YYYY-MM-DD — parse as local date to avoid timezone shifts
+  const [y,m,dd] = isoDate.split('-').map(Number);
+  const d = new Date(y, (m||1)-1, dd||1);
+  const days = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+  const months = ['janv','fev','mars','avr','mai','juin','juil','aout','sept','oct','nov','dec'];
+  return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}`;
+}
+
+async function showPollHistory(pollId) {
+  const view = document.getElementById('res-view');
+  showLoader(view, 'Chargement de l\'historique...');
+  try {
+    // Issue #51 : un seul fetch avec ?include=results au lieu de N fetches
+    // parallèles (/sends/:id/results × 30 sends) qui saturaient apiLimiter.
+    const params = new URLSearchParams({ include: 'results' });
+    if (currentGroupFilter) params.set('group_id', currentGroupFilter);
+    const url = '/api/polls/' + pollId + '/history?' + params.toString();
+
+    const [r] = await Promise.all([
+      api(url),
+      activeGroupsCache.length ? Promise.resolve(null) : loadActiveGroups(),
+    ]);
+    const d = await r.json();
+
+    if (!d.groups.length) {
+      view.innerHTML = `
+        <button class="btn btn-sm btn-secondary" style="margin-bottom:12px" onclick="loadResSelect()">← Retour</button>
+        <h3>${h(d.poll.display_title || d.poll.question || 'Entrainement')}</h3>
+        ${renderGroupFilter()}
+        <div class="empty">Pas encore d'envoi${currentGroupFilter ? ' dans ce groupe' : ''}</div>
+      `;
+      return;
+    }
+    // Le summary est déjà attaché à chaque send — pas de second fetch.
+    const detailed = d.groups.flatMap(g =>
+      g.sends.map(send => ({
+        date: g.date,
+        sendId: send.id,
+        groupId: send.group_id,
+        groupName: send.group_name,
+        sentAt: send.sent_at,
+        summary: send.summary || [],
+        total: (send.summary || []).reduce((acc, s) => acc + s.count, 0),
+      }))
+    );
+
+    view.innerHTML = `
+      <button class="btn btn-sm btn-secondary" style="margin-bottom:12px" onclick="loadResSelect()">← Retour</button>
+      <h3 style="margin-bottom:8px">${h(d.poll.display_title || d.poll.question || 'Entrainement')}</h3>
+      ${renderGroupFilter()}
+      ${detailed.map(g => {
+        const max = Math.max(...g.summary.map(s => s.count), 1);
+        const time = g.sentAt ? g.sentAt.split(' ')[1]?.substring(0,5) || '' : '';
+        return `
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
+              <strong style="font-size:15px">${formatDate(g.date)}${time ? ' · ' + time : ''}</strong>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="color:var(--muted);font-size:13px">${g.total} vote(s)</span>
+                <button title="Supprimer cet envoi" style="padding:4px 8px;font-size:14px;background:transparent;border:none;color:var(--red);cursor:pointer" onclick="deleteSend(${pollId}, ${g.sendId})">🗑️</button>
+              </div>
+            </div>
+            <div style="margin-bottom:12px;font-size:13px;color:var(--muted)">
+              <span style="margin-right:6px">Envoyé à</span>${groupPill(g.groupName, g.groupId)}
+            </div>
+            ${g.summary.map(s => `
+              <div class="bar-wrap">
+                <div class="bar-label"><span>${h(s.option)}</span><span>${s.count}</span></div>
+                <div class="bar-track"><div class="bar-fill" style="width:${Math.max(s.count/max*100, s.count>0?8:0)}%"></div></div>
+                ${s.voters.length ? `<div class="bar-voters">${s.voters.map(h).join(', ')}</div>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }).join('')}
+    `;
+  } catch (e) {
+    if (e && e.message === '401') return;
+    view.innerHTML = '<div class="empty" style="color:var(--red)">Erreur de chargement</div>';
+  }
+}
+
+// Supprime un envoi unique de l'historique. Confirm() suffit (action peu
+// fréquente, pas la peine d'un modal custom). Recharge la vue après succès.
+async function deleteSend(pollId, sendId) {
+  if (!confirm('Supprimer cet envoi et tous ses votes ?')) return;
+  try {
+    const r = await api(`/api/polls/${pollId}/sends/${sendId}`, { method: 'DELETE' });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      return toast(e.error || 'Échec de la suppression', false);
+    }
+    toast('Envoi supprimé');
+    showPollHistory(pollId);
+  } catch (e) {
+    if (e && e.message !== '401') toast('Erreur réseau', false);
+  }
+}
+
+// --- Bibliothèque de phrases ---
+const LIB_CAT_LABEL = {
+  title: 'Titre',
+  yes: 'Oui',
+  no: 'Non',
+  quit: 'Je quitte',
+  injured: 'Blessé',
+};
+const DAYS_FR = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+
+// Issue #67 : onLibCategoryChange + insertDayPlaceholder sont devenus
+// no-op suite au retrait de la catégorie 'title' du selecteur. Conservés
+// (vides) pour ne pas casser les onchange/onclick inline si le HTML les
+// référence encore. Le nettoyage final retirera aussi les handlers.
+function onLibCategoryChange() { /* no-op depuis #67 */ }
+
+async function loadLibrary() {
+  const list = document.getElementById('lib-list');
+  const status = document.getElementById('lib-status');
+  showLoader(list, 'Chargement…');
+  status.innerHTML = '';
+  try {
+    const [statusRes, listRes] = await Promise.all([
+      api('/api/phrases/status'),
+      api('/api/phrases'),
+    ]);
+    const s = await statusRes.json();
+    const phrases = await listRes.json();
+
+    // Bandeau status
+    if (s.ready) {
+      status.innerHTML = `
+        <div style="padding:10px;background:#dcfce7;color:#166534;border-radius:8px;font-size:13px">
+          ✓ Bibliothèque prête à l'emploi
+        </div>`;
+    } else {
+      status.innerHTML = `
+        <div style="padding:10px;background:#fef3c7;color:#92400e;border-radius:8px;font-size:13px">
+          ⚠ Bibliothèque incomplète. Catégories manquantes : <strong>${s.missing.map(c=>h(LIB_CAT_LABEL[c]||c)).join(', ')}</strong>.
+          Les sondages en mode bibliothèque ne pourront pas s'envoyer tant que ces catégories seront vides.
+        </div>`;
+    }
+
+    // Groupe par catégorie
+    const byCat = {};
+    for (const p of phrases) {
+      if (!byCat[p.category]) byCat[p.category] = [];
+      byCat[p.category].push(p);
+    }
+    const order = ['title','yes','no','quit','injured'];
+    const cats = order.filter(c => byCat[c]).concat(Object.keys(byCat).filter(c => !order.includes(c)));
+
+    if (!cats.length) {
+      list.innerHTML = '<div class="empty">Aucune phrase. Ajoute la première ci-dessus.</div>';
+      return;
+    }
+
+    list.innerHTML = cats.map(cat => {
+      const items = byCat[cat];
+      // Issue #67 : 'title' n'est plus required (saisi directement dans le
+      // modal sondage). Les anciennes phrases title sont marquées 'legacy'
+      // pour signaler qu'elles ne sont plus utilisées.
+      const required = ['yes','no','quit'].includes(cat);
+      let badge;
+      if (required) {
+        badge = '<span class="badge" style="background:var(--accent-soft);color:var(--accent-text);margin-left:8px">requis</span>';
+      } else if (cat === 'title') {
+        badge = '<span class="badge" style="background:#fef3c7;color:#92400e;margin-left:8px" title="Le titre est désormais saisi dans le modal de création">legacy — non utilisé</span>';
+      } else {
+        badge = '<span class="badge" style="background:#e5e7eb;color:#374151;margin-left:8px">optionnel</span>';
+      }
+      // Pour les phrases legacy 'title', proposer un bouton "Tout supprimer"
+      // qui purge la catégorie en une fois (purgeCat). Pas de purge en masse
+      // pour les autres catégories — risque de perte de phrases utiles.
+      const purgeBtn = cat === 'title'
+        ? `<button class="btn btn-sm btn-secondary" style="margin-bottom:8px" onclick="purgeLegacyTitles()">🧹 Tout supprimer (legacy)</button>`
+        : '';
+      return `
+        <div class="card">
+          <h4 style="margin:0 0 8px 0">${h(LIB_CAT_LABEL[cat] || cat)} <span style="color:var(--muted);font-weight:normal;font-size:12px">(${items.length})</span>${badge}</h4>
+          ${purgeBtn}
+          ${items.map(p => {
+            const dayInfo = (cat === 'title' && p.training_day !== null && p.training_day !== undefined)
+              ? `<span class="badge" style="background:var(--accent-soft);color:var(--accent-text);margin-right:6px;font-size:10px">${h(DAYS_FR[p.training_day])}</span>`
+              : '';
+            return `
+              <div class="wl-item" style="padding:8px 0;border-top:1px solid var(--border)">
+                <span style="flex:1">${dayInfo}${h(p.text)}</span>
+                <button class="btn btn-sm btn-danger" onclick="delLibPhrase(${p.id})">Supprimer</button>
+              </div>`;
+          }).join('')}
+        </div>`;
+    }).join('');
+  } catch (e) {
+    if (e && e.message === '401') return;
+    list.innerHTML = '<div class="empty" style="color:var(--red)">Erreur de chargement</div>';
+  }
+}
+
+async function addLibPhrase() {
+  // Issue #67 : 'title' n'est plus dans le selecteur de catégorie, donc
+  // training_day n'est jamais transmis depuis l'UI. Le backend ignore
+  // training_day pour les catégories non-title.
+  const cat = document.getElementById('lib-cat').value;
+  const text = document.getElementById('lib-text').value.trim();
+  if (!text) return toast('Texte requis', false);
+  try {
+    const r = await api('/api/phrases', {
+      method: 'POST',
+      body: JSON.stringify({ category: cat, text }),
+    });
+    if (!r.ok) {
+      const e = await r.json();
+      return toast(e.error || 'Erreur', false);
+    }
+    document.getElementById('lib-text').value = '';
+    toast('Ajoutée');
+    loadLibrary();
+  } catch (e) {
+    if (e.message !== '401') toast('Erreur réseau', false);
+  }
+}
+
+// Issue #67 cleanup : purge en masse des phrases d'une catégorie legacy.
+// Le bouton n'apparaît que sur la section 'title' (legacy) et le backend
+// refuse les catégories REQUIRED — double sécurité (UI + serveur).
+async function purgeLegacyTitles() {
+  if (!confirm('Supprimer TOUTES les phrases legacy "title" ?\n\nElles ne sont plus utilisées depuis le passage au titre saisi dans le modal de création.')) return;
+  try {
+    const r = await api('/api/phrases/category/title', { method: 'DELETE' });
+    if (!r.ok) {
+      const e = await r.json();
+      return toast(e.error || 'Erreur', false);
+    }
+    const d = await r.json();
+    toast(`${d.deleted} phrase(s) legacy supprimée(s)`);
+    loadLibrary();
+  } catch (e) {
+    if (e.message !== '401') toast('Erreur réseau', false);
+  }
+}
+
+async function delLibPhrase(id) {
+  if (!confirm('Supprimer cette phrase ?')) return;
+  try {
+    const r = await api('/api/phrases/' + id, { method: 'DELETE' });
+    if (!r.ok) {
+      const e = await r.json();
+      return toast(e.error || 'Erreur', false);
+    }
+    toast('Supprimée');
+    loadLibrary();
+  } catch (e) {
+    if (e.message !== '401') toast('Erreur réseau', false);
+  }
+}
+
+// --- Whitelist ---
+async function loadWl() {
+  if (!isAdmin) {
+    document.getElementById('wl-section').style.display = 'none';
+    return;
+  }
+  document.getElementById('wl-section').style.display = 'block';
+  const list = document.getElementById('wl-list');
+  if (!list.innerHTML) showLoader(list, 'Chargement...');
+  try {
+    const r = await api('/api/whitelist');
+    if (!r.ok) return;
+    const phones = await r.json();
+    list.innerHTML = phones.length
+      ? phones.map(p => `<div class="wl-item"><span>+${h(p)}</span><button class="btn btn-sm btn-danger" onclick="delWl('${h(p)}')">Retirer</button></div>`).join('')
+      : '<p style="color:var(--muted);font-size:13px">Aucun numero (acces libre)</p>';
+  } catch (e) {
+    if (e && e.message === '401') return;
+    list.innerHTML = '<p style="color:var(--red);font-size:13px">Erreur de chargement</p>';
+  }
+}
+async function delWl(p) {
+  if (!confirm('Retirer +' + p + ' ?')) return;
+  const btn = event && event.currentTarget;
+  setBtnLoading(btn, true, '...');
+  try {
+    await api('/api/whitelist/' + p, { method: 'DELETE' });
+    toast('Retire');
+    loadWl();
+  } catch {}
+  finally { setBtnLoading(btn, false); }
+}
+
+// --- Online users (admin only) ---
+async function loadOnline() {
+  if (!isAdmin) {
+    document.getElementById('online-section').style.display = 'none';
+    return;
+  }
+  document.getElementById('online-section').style.display = 'block';
+  const list = document.getElementById('online-list');
+  if (!list.innerHTML) showLoader(list, 'Chargement...');
+  try {
+    const r = await api('/api/online');
+    if (!r.ok) return;
+    const users = await r.json();
+    if (!users.length) {
+      list.innerHTML = '<p style="color:var(--muted);font-size:13px">Personne en ligne</p>';
+      return;
+    }
+    list.innerHTML = users.map(u => `
+      <div class="online-row">
+        <div class="online-dot"></div>
+        <div class="online-info">
+          <div class="online-phone">+${h(u.phone)}</div>
+          <div class="online-time">${formatRelative(u.last_seen_at)}</div>
+        </div>
+        <span class="badge badge-${u.role}">${u.role === 'admin' ? 'Admin' : u.role === 'viewer' ? 'Observateur' : 'Membre'}</span>
+      </div>
+    `).join('');
+  } catch (e) {
+    if (e && e.message === '401') return;
+    list.innerHTML = '<p style="color:var(--red);font-size:13px">Erreur</p>';
+  }
+}
+
+// --- Viewers (admin only) ---
+async function loadVw() {
+  if (!isAdmin) {
+    document.getElementById('vw-section').style.display = 'none';
+    return;
+  }
+  document.getElementById('vw-section').style.display = 'block';
+  const list = document.getElementById('vw-list');
+  if (!list.innerHTML) showLoader(list, 'Chargement...');
+  try {
+    // Parallel fetch: viewers list + online users (to mark who's connected)
+    const [vwRes, onRes] = await Promise.all([
+      api('/api/viewers'),
+      api('/api/online').catch(() => null),
+    ]);
+    if (!vwRes.ok) return;
+    const phones = await vwRes.json();
+    let onlineSet = new Set();
+    if (onRes && onRes.ok) {
+      try {
+        const online = await onRes.json();
+        onlineSet = new Set(online.map(u => u.phone));
+      } catch {}
+    }
+
+    list.innerHTML = phones.length
+      ? phones.map(p => {
+          const isOnline = onlineSet.has(p);
+          return `
+            <div class="wl-item">
+              <div style="display:flex;align-items:center;gap:8px">
+                ${isOnline ? '<div class="online-dot"></div>' : '<div style="width:10px;height:10px;border-radius:50%;background:var(--muted);opacity:.4"></div>'}
+                <span>+${h(p)}</span>
+                ${isOnline ? '<span style="color:var(--g);font-size:11px;font-weight:600">EN LIGNE</span>' : '<span style="color:var(--muted);font-size:11px">hors ligne</span>'}
+              </div>
+              <button class="btn btn-sm btn-danger" onclick="delVw('${h(p)}')">Retirer</button>
+            </div>
+          `;
+        }).join('')
+      : '<p style="color:var(--muted);font-size:13px">Aucun observateur</p>';
+  } catch (e) {
+    if (e && e.message === '401') return;
+    list.innerHTML = '<p style="color:var(--red);font-size:13px">Erreur</p>';
+  }
+}
+async function addVw() {
+  const v = document.getElementById('vw-input').value.trim();
+  if (!v) return;
+  const btn = event && event.currentTarget;
+  setBtnLoading(btn, true, 'Ajout...');
+  try {
+    const r = await api('/api/viewers', { method: 'POST', body: JSON.stringify({ phone: v }) });
+    if (!r.ok) { const e = await r.json(); return toast(e.error, false); }
+    document.getElementById('vw-input').value = '';
+    toast('Ajoute');
+    loadVw();
+  } catch {}
+  finally { setBtnLoading(btn, false); }
+}
+async function delVw(p) {
+  if (!confirm('Retirer +' + p + ' ?')) return;
+  const btn = event && event.currentTarget;
+  setBtnLoading(btn, true, '...');
+  try {
+    await api('/api/viewers/' + p, { method: 'DELETE' });
+    toast('Retire');
+    loadVw();
+  } catch {}
+  finally { setBtnLoading(btn, false); }
+}
+
+// --- WhatsApp link management (admin only) ---
+let waLinkPollInterval = null;
+// Settings-side linking UI state: 'info' (just loaded), 'method' (picker),
+// 'qr' (showing QR), 'pair-phone' (phone input), 'pair-code' (code display)
+let waLinkView = 'info';
+
+function setWaUnlinkVisible(show) {
+  const btn = document.getElementById('wa-unlink-btn');
+  const help = document.getElementById('wa-unlink-help');
+  if (btn) btn.style.display = show ? '' : 'none';
+  if (help) help.style.display = show ? '' : 'none';
+}
+
+async function loadWaLinkInfo() {
+  if (!isAdmin) {
+    document.getElementById('wa-link-section').style.display = 'none';
+    stopWaLinkPoll();
+    return;
+  }
+  document.getElementById('wa-link-section').style.display = 'block';
+  // Don't override the pair-phone input view — it's user-initiated.
+  // But pair-code must still check if WA became ready (linking succeeded).
+  if (waLinkView === 'pair-phone') return;
+  try {
+    const r = await api('/api/wa-admin/info');
+    if (!r.ok) return;
+    const d = await r.json();
+    const el = document.getElementById('wa-link-info');
+
+    // If still on pair-code and WA isn't ready yet, don't touch the UI
+    if (waLinkView === 'pair-code' && !d.ready) return;
+
+    if (d.ready) {
+      // Compte lié → arrêter le polling, afficher les infos du compte
+      stopWaLinkPoll();
+      if (waLinkView === 'pair-code' || waLinkView === 'qr') toast('WhatsApp connecte !');
+      waLinkView = 'info';
+      el.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="online-dot"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:15px">${d.linked_name ? h(d.linked_name) : 'Compte WhatsApp'}</div>
+            <div style="font-size:13px;color:var(--muted);font-family:monospace">+${h(d.linked_phone || '???')}</div>
+          </div>
+        </div>
+      `;
+      setWaUnlinkVisible(true);
+    } else if (d.has_qr) {
+      // Not linked, QR available — show method picker or current view
+      setWaUnlinkVisible(false);
+      if (waLinkView === 'qr') {
+        // Already on QR view: refresh QR image in case it rotated
+        try {
+          const qrR = await api('/api/wa-admin/qr');
+          const qrD = await qrR.json();
+          if (qrD.qr_data_url) {
+            const img = el.querySelector('#wa-link-qr-img');
+            if (img) img.src = qrD.qr_data_url;
+          }
+        } catch {}
+      } else if (waLinkView === 'info' || waLinkView === 'method') {
+        renderWaLinkMethodPicker();
+      }
+      startWaLinkPoll();
+    } else {
+      // Loading (neither ready nor QR yet)
+      setWaUnlinkVisible(false);
+      waLinkView = 'info';
+      el.innerHTML = '<div class="loader-box" style="padding:24px 10px"><div class="spinner spinner-lg"></div><p style="margin:0">Connexion WhatsApp en cours...</p><p style="margin:0;font-size:11px;opacity:0.7">Cela peut prendre jusqu\'a 1 minute.</p></div>';
+      startWaLinkPoll();
+    }
+  } catch {}
+}
+
+function renderWaLinkMethodPicker() {
+  waLinkView = 'method';
+  const el = document.getElementById('wa-link-info');
+  el.innerHTML = `
+    <p style="color:var(--orange);font-size:13px;margin-bottom:12px">⚠ Aucun compte lie. Choisissez la methode de jumelage.</p>
+    <button class="btn btn-primary" style="margin-bottom:8px" onclick="waLinkPickQr()">QR code</button>
+    <button class="btn btn-secondary" onclick="waLinkPickPhone()">Numero de telephone</button>
+  `;
+}
+
+async function waLinkPickQr() {
+  waLinkView = 'qr';
+  const el = document.getElementById('wa-link-info');
+  el.innerHTML = '<div class="loader-box" style="padding:20px 10px"><div class="spinner spinner-lg"></div><p style="margin:0">Chargement du QR...</p></div>';
+  try {
+    const r = await api('/api/wa-admin/qr');
+    const d = await r.json();
+    if (!r.ok || !d.qr_data_url) {
+      el.innerHTML = '<p style="color:var(--red);font-size:13px">Pas de QR disponible. Reessayez dans quelques secondes.</p>';
+      return;
+    }
+    el.innerHTML = `
+      <img id="wa-link-qr-img" src="${d.qr_data_url}" style="border-radius:8px;max-width:240px;width:100%;display:block;margin:0 auto 10px">
+      <p style="color:var(--muted);font-size:11px;text-align:center;margin-bottom:10px">WhatsApp > Appareils lies > Lier un appareil</p>
+      <button class="btn btn-sm btn-secondary" style="width:100%" onclick="renderWaLinkMethodPicker()">← Autre methode</button>
+    `;
+  } catch {
+    el.innerHTML = '<p style="color:var(--red);font-size:13px">Erreur reseau</p>';
+  }
+}
+
+function waLinkPickPhone() {
+  waLinkView = 'pair-phone';
+  const el = document.getElementById('wa-link-info');
+  el.innerHTML = `
+    <p style="color:var(--muted);font-size:13px;margin-bottom:10px">Entrez le numero du compte WhatsApp a lier</p>
+    <input type="tel" id="wa-link-phone-input" placeholder="33612345678" inputmode="numeric" style="width:100%;margin-bottom:6px">
+    <p style="color:var(--muted);font-size:11px;margin-bottom:10px;line-height:1.5">
+      ⚠️ Format <strong>international</strong> (indicatif pays, sans le 0)<br>
+      ✅ <strong style="color:var(--g)">33612345678</strong> · ❌ <span style="color:var(--red)">0767545053</span>
+    </p>
+    <button class="btn btn-primary" onclick="waLinkAskPairingCode()">Generer le code</button>
+    <button class="btn btn-sm btn-secondary" style="width:100%;margin-top:8px" onclick="renderWaLinkMethodPicker()">← Autre methode</button>
+  `;
+  setTimeout(() => document.getElementById('wa-link-phone-input')?.focus(), 50);
+}
+
+async function waLinkAskPairingCode() {
+  const input = document.getElementById('wa-link-phone-input');
+  const phone = (input?.value || '').trim().replace(/[^0-9]/g, '');
+  if (!phone || phone.length < 10) return toast('Numero trop court (10-15 chiffres avec indicatif pays)', false);
+  if (phone.length > 15) return toast('Numero trop long (15 chiffres max)', false);
+  if (phone.startsWith('0')) return toast('Ne commencez pas par 0. Ex: 33612345678', false);
+  const btn = event && event.currentTarget;
+  setBtnLoading(btn, true, 'Generation...');
+  try {
+    const r = await api('/api/wa-admin/pairing-code', { method: 'POST', body: JSON.stringify({ phone }) });
+    const d = await r.json();
+    if (!r.ok) {
+      if (d.code === 'WA_RATE_LIMIT') {
+        alert('⚠️ ' + (d.error || 'WhatsApp a temporairement bloque les codes de pairage. Utilisez le QR a la place.'));
+        renderWaLinkMethodPicker();
+        return;
+      }
+      return toast(d.error || 'Erreur', false);
+    }
+    waLinkView = 'pair-code';
+    const el = document.getElementById('wa-link-info');
+    const codeJs = JSON.stringify(d.code);
+    el.innerHTML = `
+      <p style="color:var(--muted);font-size:13px;margin-bottom:10px">Entrez ce code dans WhatsApp sur le telephone du bot</p>
+      <div style="font-family:'SF Mono',Monaco,monospace;font-size:30px;font-weight:700;letter-spacing:6px;text-align:center;padding:16px;background:var(--bg);border-radius:10px;margin-bottom:8px;color:var(--g)">${h(d.code)}</div>
+      <button class="btn btn-primary" style="width:100%;margin-bottom:10px" onclick='copyToClipboard(${codeJs})'>
+        <span style="display:inline-flex;align-items:center;gap:8px;justify-content:center">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copier le code
+        </span>
+      </button>
+      <p style="color:var(--muted);font-size:11px;text-align:left;margin-bottom:10px;line-height:1.5">
+        1. WhatsApp &gt; Appareils lies &gt; Lier un appareil<br>
+        2. Tapez "Lier avec un numero de telephone"<br>
+        3. Entrez le code ci-dessus
+      </p>
+      <button class="btn btn-sm btn-secondary" style="width:100%;margin-bottom:6px" onclick="waLinkPickPhone()">Nouveau code</button>
+      <button class="btn btn-sm btn-secondary" style="width:100%" onclick="renderWaLinkMethodPicker()">← Autre methode</button>
+    `;
+    startWaLinkPoll();
+  } catch { toast('Erreur reseau', false); }
+  finally { setBtnLoading(btn, false); }
+}
+
+function startWaLinkPoll() {
+  if (waLinkPollInterval) return;
+  waLinkPollInterval = setInterval(() => {
+    if (document.hidden) return;
+    if (document.getElementById('p-settings').classList.contains('active')) {
+      loadWaLinkInfo();
+    } else {
+      stopWaLinkPoll();
+    }
+  }, 4000);
+}
+
+function stopWaLinkPoll() {
+  if (waLinkPollInterval) { clearInterval(waLinkPollInterval); waLinkPollInterval = null; }
+}
+
+async function unlinkWhatsApp() {
+  if (!confirm("⚠ ATTENTION: Delier le compte WhatsApp actuel.\n\nLes sondages programmes ne seront plus envoyes jusqu'a ce qu'un nouveau compte soit lie.\n\nContinuer ?")) return;
+  const btn = document.getElementById('wa-unlink-btn');
+  setBtnLoading(btn, true, 'Deconnexion...');
+  try {
+    const r = await api('/api/wa-admin/unlink', { method: 'POST' });
+    if (!r.ok) { const e = await r.json(); return toast(e.error || 'Erreur', false); }
+    toast('Compte delie, reinitialisation...');
+    // Reset the linking view so the picker appears once the new QR/pair is ready
+    waLinkView = 'info';
+    setWaUnlinkVisible(false);
+    const el = document.getElementById('wa-link-info');
+    if (el) el.innerHTML = '<div class="loader-box" style="padding:24px 10px"><div class="spinner spinner-lg"></div><p style="margin:0">Reinitialisation WhatsApp...</p></div>';
+    setTimeout(loadWaLinkInfo, 2000);
+  } catch { toast('Erreur', false); }
+  finally { setBtnLoading(btn, false); }
+}
+
+// --- Backup / Restore (admin only, Postgres) ---
+async function autoRefreshNames() {
+  try { await api('/api/polls/refresh-names', { method: 'POST' }); } catch {}
+}
+
+// --- Init ---
+async function init() {
+  if (token) {
+    try {
+      const r = await fetch(A + '/api/auth/me', { headers: hdr() });
+      if (r.ok) {
+        const me = await r.json();
+        isAdmin = !!me.is_admin;
+        isViewer = !!me.is_viewer;
+        showApp();
+        return;
+      }
+    } catch {}
+    localStorage.removeItem('pb_token'); token = null;
+  }
+  showLogin();
+}
+init();
+// Fetch and display app version (behind requireAuth — only visible once logged in)
+function loadAppVersion() {
+  if (!token) return;
+  fetch(A + '/api/version', { headers: hdr() }).then(r => r.ok ? r.json() : null).then(d => {
+    if (!d) return;
+    const v = 'v' + d.version;
+    const el1 = document.getElementById('app-version-login');
+    const el2 = document.getElementById('app-version-topbar');
+    if (el1) el1.textContent = v;
+    if (el2) el2.textContent = v;
+  }).catch(() => {});
+}
+loadAppVersion();
+setInterval(() => {
+  if (document.hidden) return;
+  if (token) checkStatus(); else checkWa();
+}, 20000 + Math.floor(Math.random() * 3000));
+// Auto-refresh observers/online status when on Settings page (parallel)
+setInterval(() => {
+  if (document.hidden) return;
+  if (!token) return;
+  if (document.getElementById('p-settings').classList.contains('active')) {
+    Promise.all([loadOnline(), loadVw()]);
+  }
+}, 15000 + Math.floor(Math.random() * 3000));
+</script>
+</body>
+</html>
