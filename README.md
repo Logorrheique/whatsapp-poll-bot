@@ -1,33 +1,33 @@
 # Poll Bot
 
-> Bot WhatsApp pour programmer des sondages récurrents dans plusieurs groupes, avec un dashboard web mobile-first. Auto-hébergeable, ~80 Mo RAM, pas de browser headless.
+> Self-hosted WhatsApp bot to schedule recurring polls across multiple groups, with a mobile-first web dashboard. ~80 MB RAM, no headless browser.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-22%2B-brightgreen)](package.json)
 [![TypeScript](https://img.shields.io/badge/typescript-5.7-blue)](tsconfig.json)
 
-## Fonctionnalités
+## Features
 
-- **Sondages récurrents** programmés via cron (quotidien, jours ouvrés, hebdo, mensuel, custom)
-- **Multi-groupes** : un sondage peut viser N groupes en parallèle
-- **Collecte des votes en temps réel** via le protocole WhatsApp Web ([Baileys](https://github.com/WhiskeySockets/Baileys))
-- **Historique 21 jours** avec filtre par jour de la semaine
-- **3 rôles** : admin, utilisateur (création de sondages), observateur (lecture seule)
-- **Authentification** par code 6 chiffres envoyé sur WhatsApp
-- **Backup / restore** dans PostgreSQL
-- **Dashboard mobile-first** vanilla JS, fichier HTML unique, pas de build step
+- **Recurring polls** scheduled via cron (daily, weekdays, weekly, monthly, custom)
+- **Multi-group**: one poll can target N groups in parallel
+- **Real-time vote collection** via the WhatsApp Web protocol ([Baileys](https://github.com/WhiskeySockets/Baileys))
+- **21-day history** with day-of-week filter
+- **3 roles**: admin, user (poll creation), viewer (read-only)
+- **Authentication** via 6-digit code sent over WhatsApp
+- **Backup / restore** to PostgreSQL
+- **Mobile-first dashboard** in vanilla JS, single HTML file, no build step
 
-## Mise en place
+## Getting started
 
-Deux chemins : **développement local** (rapide, pour tester) ou **déploiement production** (Railway, Docker, ou n'importe quel hébergeur Node).
+Two paths: **local development** (quick, for testing) or **production deployment** (Railway, Docker, or any Node host).
 
-### Prérequis
+### Prerequisites
 
-- **Node.js ≥ 22** (LTS recommandé)
-- Un **téléphone avec WhatsApp** dont le compte sera utilisé par le bot (compte secondaire fortement recommandé — ne JAMAIS utiliser ton compte perso)
-- (Optionnel) **PostgreSQL** local pour tester les backups en dev
+- **Node.js ≥ 22** (LTS recommended)
+- A **phone with WhatsApp** whose account the bot will use (secondary account strongly recommended — NEVER use your personal account)
+- (Optional) **PostgreSQL** locally to test backups in dev
 
-### 1. Cloner et installer
+### 1. Clone and install
 
 ```bash
 git clone https://github.com/Logorrheique/whatsapp-poll-bot.git
@@ -35,61 +35,61 @@ cd whatsapp-poll-bot
 npm install
 ```
 
-### 2. Configurer
+### 2. Configure
 
 ```bash
 cp .env.example .env
 ```
 
-Édite `.env` — au minimum :
+Edit `.env` — at minimum:
 
 ```env
-ADMIN_PHONES=33612345678          # ton numéro, format international sans le +
-PAIR_SECRET=<24+ chars random>    # génère avec : openssl rand -hex 24
+ADMIN_PHONES=33612345678          # your number, international format without the +
+PAIR_SECRET=<24+ chars random>    # generate with: openssl rand -hex 24
 ```
 
-Toutes les variables d'env disponibles sont documentées dans `.env.example`.
+All available env variables are documented in `.env.example`.
 
-### 3. Lancer en dev
+### 3. Run in dev mode
 
 ```bash
-npm run dev    # tsx watch sur src/index.ts, port 3000
+npm run dev    # tsx watch on src/index.ts, port 3000
 ```
 
-Ouvre http://localhost:3000.
+Open http://localhost:3000.
 
-### 4. Lier le compte WhatsApp
+### 4. Link the WhatsApp account
 
-1. Sur la page de login, choisis **Mode Admin**
-2. Entre ton `PAIR_SECRET`
-3. Un QR code s'affiche
-4. Sur le **téléphone du bot** (pas le tien) : ouvre WhatsApp → **Paramètres** → **Appareils liés** → **Lier un appareil**
-5. Scanne le QR avec la caméra
-6. Connexion établie en 2-5s — le dashboard te demande maintenant ton numéro pour t'authentifier
+1. On the login page, choose **Admin mode**
+2. Enter your `PAIR_SECRET`
+3. A QR code is displayed
+4. On the **bot's phone** (not yours): open WhatsApp → **Settings** → **Linked Devices** → **Link a Device**
+5. Scan the QR with the camera
+6. Connection established in 2-5s — the dashboard now asks for your number to authenticate you
 
-> ⚠️ **Première connexion** : il te faut deux appareils — un pour afficher ce QR et un autre pour scanner avec WhatsApp.
+> ⚠️ **First connection**: you need two devices — one to display the QR and another to scan it with WhatsApp.
 
-### 5. Te connecter au dashboard
+### 5. Sign in to the dashboard
 
-1. Sur la page de login, entre ton numéro (celui de `ADMIN_PHONES`)
-2. Tu reçois un code 6 chiffres sur WhatsApp depuis le compte du bot
-3. Entre le code → connecté
+1. On the login page, enter your number (one listed in `ADMIN_PHONES`)
+2. You'll receive a 6-digit code on WhatsApp from the bot's account
+3. Enter the code → signed in
 
-Tu peux maintenant créer ton premier sondage.
+You can now create your first poll.
 
-## Déploiement production
+## Production deployment
 
-### Railway (recommandé — déploiement Docker auto-magique)
+### Railway (recommended — magic Docker auto-deploy)
 
-1. **Fork ce repo** sur GitHub
-2. Sur [Railway](https://railway.app/) : *New Project* → *Deploy from GitHub*, sélectionne ton fork
-3. Ajoute un service **PostgreSQL** (marketplace Railway) — `DATABASE_URL` sera auto-injectée
-4. Crée un **Volume** : *Settings → Volumes → Add Volume*, mount path `/app/data`, taille 1 GB
-   - **Critique** : sans volume, la session WhatsApp et la DB SQLite sont perdues à chaque redeploy
-5. Variables d'environnement : `ADMIN_PHONES`, `PAIR_SECRET`, `NODE_ENV=production`
-6. Le premier boot crée la DB SQLite et émet un QR — ouvre l'URL Railway et scanne avec ton téléphone bot
+1. **Fork this repo** on GitHub
+2. On [Railway](https://railway.app/): *New Project* → *Deploy from GitHub*, pick your fork
+3. Add a **PostgreSQL** service (Railway marketplace) — `DATABASE_URL` is auto-injected
+4. Create a **Volume**: *Settings → Volumes → Add Volume*, mount path `/app/data`, size 1 GB
+   - **Critical**: without a volume, the WhatsApp session and SQLite DB are wiped on every redeploy
+5. Environment variables: `ADMIN_PHONES`, `PAIR_SECRET`, `NODE_ENV=production`
+6. The first boot creates the SQLite DB and emits a QR — open the Railway URL and scan with the bot's phone
 
-### Docker (n'importe où)
+### Docker (anywhere)
 
 ```bash
 docker build -t poll-bot .
@@ -102,78 +102,78 @@ docker run -d \
   poll-bot
 ```
 
-Le `Dockerfile` (Node 22 slim) build, puis lance `node dist/index.js` avec `--max-old-space-size=256` (réserve la RAM Railway).
+The `Dockerfile` (Node 22 slim) builds, then runs `node dist/index.js` with `--max-old-space-size=256` (matches Railway's RAM budget).
 
-### Auto-hébergement classique
+### Plain self-hosting
 
 ```bash
 npm run build       # compile TypeScript → dist/
-npm start           # lance dist/index.js
+npm start           # run dist/index.js
 ```
 
-Sers derrière nginx/caddy en HTTPS pour la prod (le bot redirect HTTP → HTTPS si `NODE_ENV=production`).
+Serve behind nginx/caddy with HTTPS in production (the bot redirects HTTP → HTTPS when `NODE_ENV=production`).
 
-## Stack technique
+## Tech stack
 
-| Couche | Techno |
+| Layer | Tech |
 |---|---|
 | Runtime | Node.js 22 + TypeScript |
 | Web | Express 4 + Helmet + express-rate-limit |
-| WhatsApp | [`@whiskeysockets/baileys`](https://github.com/WhiskeySockets/Baileys) — WebSocket pur, pas de Chromium |
-| DB primaire | SQLite via `better-sqlite3` (WAL mode) |
-| DB backups | PostgreSQL via `pg` |
+| WhatsApp | [`@whiskeysockets/baileys`](https://github.com/WhiskeySockets/Baileys) — pure WebSocket, no Chromium |
+| Primary DB | SQLite via `better-sqlite3` (WAL mode) |
+| Backup DB | PostgreSQL via `pg` |
 | Scheduler | `node-cron` (timezone-aware) |
-| Frontend | HTML/CSS/JS vanilla, fichier unique (pas de framework, pas de build) |
-| Tests | Vitest — ~290 tests (unit, DB, routes HTTP, scheduler, e2e, perf) |
+| Frontend | Vanilla HTML/CSS/JS, single file (no framework, no build) |
+| Tests | Vitest — ~290 tests (unit, DB, HTTP routes, scheduler, e2e, perf) |
 
 ## Architecture
 
-Trois subsystèmes co-routinés dans un seul process :
+Three subsystems co-routined inside a single process:
 
-1. **Express HTTP** (`src/index.ts`) : routes publiques (auth, status WhatsApp), authentifiées (sondages, groupes), admin (whitelist, observateurs, backups). Helmet + CSP, rate limiting sur `/api/auth/*`, `/api/wa/*`, et endpoints généraux.
-2. **Baileys** (`src/whatsapp.ts`) : init WS WhatsApp Web, callback `getMessage()` pour décrypter les votes, capture passive des `pushName` pour résoudre les noms de votants. Watchdog 30s anti-blocage + soupape `POST /api/wa/reset-session`.
-3. **node-cron** (`src/scheduler.ts`) : lit les sondages actifs depuis SQLite, programme leur envoi en `Europe/Paris` (override avec `TIMEZONE`).
+1. **Express HTTP** (`src/index.ts`): public routes (auth, WhatsApp status), authenticated (polls, groups), admin (whitelist, viewers, backups). Helmet + CSP, rate limiting on `/api/auth/*`, `/api/wa/*`, and general endpoints.
+2. **Baileys** (`src/whatsapp.ts`): WhatsApp Web WS init, `getMessage()` callback to decrypt votes, passive `pushName` capture to resolve voter names. 30s anti-stuck watchdog + escape hatch `POST /api/wa/reset-session`.
+3. **node-cron** (`src/scheduler.ts`): reads active polls from SQLite, schedules sends in `Europe/Paris` (override with `TIMEZONE`).
 
-Données :
-- **SQLite** (`data/polls.db`, WAL) : tables `polls`, `poll_sends`, `poll_votes`, `poll_message_map` (mapping persistant message → sondage), `sessions`, `allowed_phones`, `viewers`, `audit_logs`. Migrations idempotentes au boot.
-- **PostgreSQL** (optionnel, via `DATABASE_URL`) : table `backups` qui stocke des snapshots SQLite complets en `BYTEA`.
+Data:
+- **SQLite** (`data/polls.db`, WAL): tables `polls`, `poll_sends`, `poll_votes`, `poll_message_map` (persistent message → poll mapping), `sessions`, `allowed_phones`, `viewers`, `audit_logs`. Idempotent migrations at boot.
+- **PostgreSQL** (optional, via `DATABASE_URL`): `backups` table storing full SQLite snapshots as `BYTEA`.
 
 ## Tests
 
 ```bash
-npm test                # Suite Vitest complète (~290 tests)
-npm run test:unit       # Unit tests seulement
-npm run test:db         # Tests DB seulement
-npm run test:routes     # Tests routes HTTP
-npm run test:scheduler  # Tests scheduler
-npm run test:coverage   # Avec rapport de couverture
-npx tsc --noEmit        # Type check strict
+npm test                # full Vitest suite (~290 tests)
+npm run test:unit       # unit tests only
+npm run test:db         # DB tests only
+npm run test:routes     # HTTP route tests
+npm run test:scheduler  # scheduler tests
+npm run test:coverage   # with coverage report
+npx tsc --noEmit        # strict type check
 ```
 
-CI GitHub Actions sur push/PR : build TypeScript + 4 jobs de tests parallèles.
+GitHub Actions CI runs on push/PR: TypeScript build + 4 parallel test jobs.
 
-## Limitations connues
+## Known limitations
 
-- **Un seul compte WhatsApp lié** à la fois (limitation du protocole WA Web)
-- **Session perdue après ~14 jours** si le téléphone source n'ouvre pas WhatsApp (limite Meta)
-- **QR change toutes les ~20s** pendant le pairing (limite Meta)
-- **Sondages natifs WhatsApp uniquement** — la Cloud API officielle Meta ne supporte pas les sondages natifs, donc pas d'alternative managée
-- **Pas de mode multi-tenant** — un déploiement = une organisation
+- **One linked WhatsApp account at a time** (WA Web protocol limitation)
+- **Session lost after ~14 days** if the source phone never opens WhatsApp (Meta limit)
+- **QR rotates every ~20s** during pairing (Meta limit)
+- **Native WhatsApp polls only** — Meta's official Cloud API doesn't support native polls, so there's no managed alternative
+- **No multi-tenant mode** — one deployment = one organization
 
-## Sécurité & responsabilité
+## Security & responsibility
 
-Ce projet utilise le protocole WhatsApp Web non-officiel (Baileys), ce qui techniquement viole les ToS de Meta — comme tout client tiers (web, desktop). Risque pratique : un compte WhatsApp peut être banni par Meta s'il est détecté comme automatisé. Pour minimiser le risque :
+This project uses the unofficial WhatsApp Web protocol (Baileys), which technically violates Meta's ToS — like any third-party client (web, desktop). Practical risk: Meta may ban a WhatsApp account if it's detected as automated. To minimize risk:
 
-- Utilise un compte WhatsApp **secondaire** dédié au bot
-- Ne dépasse pas un volume normal d'envois (≤ quelques sondages par groupe par jour)
-- Garde le téléphone du bot vivant (ouvre WhatsApp dessus régulièrement)
+- Use a **secondary** WhatsApp account dedicated to the bot
+- Stay within normal sending volumes (≤ a few polls per group per day)
+- Keep the bot's phone alive (open WhatsApp on it regularly)
 
-Pour signaler une vulnérabilité dans le code : voir [`SECURITY.md`](SECURITY.md).
+To report a vulnerability in the code: see [`SECURITY.md`](SECURITY.md).
 
-## Contribuer
+## Contributing
 
-Voir [`CONTRIBUTING.md`](CONTRIBUTING.md). En bref : fork → branche → PR vers `preproduction`. Tous les tests doivent passer + `tsc --noEmit` clean.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). In short: fork → branch → PR against `preproduction`. All tests must pass + `tsc --noEmit` clean.
 
-## Licence
+## License
 
-[MIT](LICENSE) — utilise, fork, modifie, redistribue librement.
+[MIT](LICENSE) — use, fork, modify, redistribute freely.
